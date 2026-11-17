@@ -93,3 +93,50 @@ def test_disabled_layers_skip_tensor_conversion_for_render_and_export(image, tmp
     assert summary.frames == 1
     summary = Visualizer(options, save=tmp_path / "video.avi")([result])
     assert summary.frames == 1
+
+
+@pytest.mark.parametrize(
+    "height,width,line,font",
+    [
+        (360, 640, 1, 10),
+        (720, 1280, 2, 18),
+        (1080, 1920, 3, 27),
+        (1440, 2560, 4, 36),
+        (2160, 3840, 6, 54),
+        (4320, 7680, 12, 108),
+    ],
+)
+def test_automatic_sizes_follow_resolution_in_both_orientations(height, width, line, font):
+    style = Visualizer().style
+    for shape in ((height, width), (width, height)):
+        assert style.resolved_line_width(shape) == line
+        assert style.resolved_font_size(shape) == font
+
+
+def test_portrait_and_landscape_render_with_same_font_and_outline(arial, monkeypatch):
+    widths = []
+    monkeypatch.setattr(
+        "ultraviz.annotation.Annotator._outline",
+        lambda self, image, path, bgr, line: widths.append(line),
+    )
+    visualizer = Visualizer(show_conf=False)
+    sizes = []
+    for shape in ((720, 1280), (1280, 720), (1080, 1920), (1920, 1080)):
+        height, width = shape
+        image = np.zeros((height, width, 3), np.uint8)
+        item = Instance(0, name="person", box=(100, 100, width - 100, height - 100))
+        output = visualizer(Prediction(image, (item,)))
+        sizes.append(visualizer._annotator._font.size)
+        assert output.shape == image.shape
+    assert widths == [2, 2, 3, 3]
+    assert sizes == [18, 18, 27, 27]
+
+
+def test_fixed_overrides_and_tiny_object_limits_on_large_images():
+    automatic = Visualizer().style
+    fixed = Visualizer(line_width=1, font_size=20).style
+    for shape in ((720, 1280), (1080, 1920), (7680, 4320)):
+        assert fixed.resolved_line_width(shape) == 1
+        assert fixed.resolved_font_size(shape) == 20
+        assert automatic.resolved_line_width(shape, (12, 20)) == 1
+        assert automatic.resolved_font_size(shape, (12, 20)) == 10

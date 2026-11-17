@@ -171,6 +171,24 @@ print(summary.frames, summary.output, summary.stopped)
 | `skeleton` | Automatic | COCO edges for 17 points; custom zero based edge pairs otherwise |
 | `ignored_semantic_ids` | `(255, -1)` | Semantic IDs left uncolored |
 
+Automatic sizing uses `scale = min(height, width) / 720`. The default outline
+is `max(1, round(2 * scale))` pixels and Arial text is
+`max(10, round(18 * scale))` pixels. Using the shorter side gives the same
+sizes for portrait and landscape frames. Large images continue scaling
+without a 4K cap; small objects can receive thinner outlines and smaller labels.
+Explicit `line_width` and `font_size` values remain fixed pixel overrides.
+
+| Frame size (landscape or portrait) | Outline | Arial size |
+| --- | --- | --- |
+| 1280 × 720 / 720 × 1280 | 2 px | 18 px |
+| 1920 × 1080 / 1080 × 1920 | 3 px | 27 px |
+| 2560 × 1440 / 1440 × 2560 | 4 px | 36 px |
+| 3840 × 2160 / 2160 × 3840 | 6 px | 54 px |
+| 7680 × 4320 / 4320 × 7680 | 12 px | 108 px |
+
+These sizes use the image's pixel resolution, including for exports intended
+for print. Print DPI metadata does not change the rendered pixel dimensions.
+
 Unknown options raise `TypeError`. A `Style` object can also be passed as
 `args` or `style=...`; direct style options override its fields.
 

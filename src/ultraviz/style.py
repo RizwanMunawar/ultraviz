@@ -203,10 +203,14 @@ class Style:
         shape: tuple[int, int],
         box_size: tuple[float, float] | None = None,
     ) -> int:
-        """Scale labels to the image and cap small boxes while retaining readable text."""
+        """Scale 18 px Arial at a 720 px short edge, retaining readable small labels.
+
+        Portrait and landscape frames use the same short edge scale. Large
+        images keep scaling beyond 4K; explicit font_size remains a fixed size.
+        """
         if self.font_size is not None:
             return self.font_size
-        size = max(10, min(64, round(min(shape) * 0.025)))
+        size = max(10, round(18 * min(shape) / 720))
         if box_size is not None:
             limit = max(10, round(min(box_size[0] * 0.3, box_size[1] * 0.5)))
             if limit < size:
@@ -218,10 +222,14 @@ class Style:
         shape: tuple[int, int],
         box_size: tuple[float, float] | None = None,
     ) -> int:
-        """Scale outlines to image resolution and reduce thickness on small objects."""
+        """Scale a 2 px outline at a 720 px short edge and thin small object outlines.
+
+        Use the short edge so rotating a frame does not change its styling.
+        Explicit line_width remains a fixed pixel width at every resolution.
+        """
         if self.line_width is not None:
             return self.line_width
-        width = max(1, min(6, round(min(shape) * 0.0025)))
+        width = max(1, round(2 * min(shape) / 720))
         if box_size is not None:
             width = min(width, max(1, round(min(box_size) * 0.06)))
         return width
