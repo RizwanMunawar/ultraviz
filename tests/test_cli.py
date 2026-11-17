@@ -1,78 +1,175 @@
-"""Package and CLI behavior without loading models or opening videos."""
+# ruff: noqa: D100, D103
+# Scenario names document tests; library definitions require docstrings.
+from types import SimpleNamespace as NS
 
-import contextlib
-import io
-from importlib.metadata import distribution
-import subprocess
-import sys
-import unittest
-from unittest.mock import Mock
+import pytest
 
-from ultiviz import __version__
-from ultiviz.cli import main
+from ultraviz.cli import run_cli as main
 
 
-class PackageTests(unittest.TestCase):
-    def test_cli_forwards_options_and_camera_index(self):
-        factory = Mock()
-        factory.return_value.run.return_value = "output.mp4"
-        with contextlib.redirect_stdout(io.StringIO()):
-            main(["--model", "pose.pt", "--source", "0", "--trails", "--chart",
-                  "--headless", "--hide-boxes", "--classes", "0", "2"],
-                 visualizer_class=factory)
-        options = factory.call_args.kwargs
-        self.assertTrue(options["tracking"])
-        self.assertTrue(options["show_trails"])
-        self.assertTrue(options["show_chart"])
-        self.assertFalse(options["show_boxes"])
-        self.assertEqual(options["class_ids"], [0, 2])
-        factory.return_value.run.assert_called_once_with(
-            0, "output-visualization.mp4", show_window=False,
+def test_help(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--no-summary", "--help"])
+    assert exc.value.code == 0
+    assert "Ultraviz" in capsys.readouterr().out
+
+
+def test_video_requires_fps():
+    with pytest.raises(SystemExit) as exc:
+        main(["--no-summary", "--model", "model.pt", "--source", "in.mp4", "--output", "out.mp4"])
+    assert exc.value.code == 2
+
+
+def test_image(monkeypatch, image, tmp_path):
+    result = NS(orig_img=image, names={})
+    monkeypatch.setattr("ultraviz.cli.predict", lambda *args, **kwargs: iter([result]))
+    output = tmp_path / "image.png"
+    assert (
+        main(
+            [
+                "--no-summary",
+                "--model",
+                "model.pt",
+                "--source",
+                "in.png",
+                "--output",
+                str(output),
+                "--no-labels",
+            ]
         )
+        == 0
+    )
+    assert output.is_file()
 
-    def test_cli_requires_model_and_source_before_inference(self):
-        factory = Mock()
-        with contextlib.redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit) as error:
-                main([], visualizer_class=factory)
-        self.assertEqual(error.exception.code, 2)
-        factory.assert_not_called()
 
-    def test_installed_distribution_version_and_entry_point(self):
-        package = distribution("ultiviz")
-        self.assertEqual(package.version, __version__)
-        entry_points = [entry for entry in package.entry_points
-                        if entry.group == "console_scripts" and entry.name == "ultiviz"]
-        self.assertEqual(len(entry_points), 1)
-        self.assertIs(entry_points[0].load(), main)
-
-    def test_module_help_exits_without_model_or_source(self):
-        result = subprocess.run(
-            [sys.executable, "-m", "ultiviz", "--help"],
-            check=True, capture_output=True, text=True,
+def test_multiple_frames_do_not_publish(monkeypatch, image, tmp_path):
+    result = NS(orig_img=image, names={})
+    monkeypatch.setattr("ultraviz.cli.predict", lambda *args, **kwargs: iter([result, result]))
+    output = tmp_path / "image.png"
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--no-summary",
+                "--model",
+                "model.pt",
+                "--source",
+                "in.mp4",
+                "--output",
+                str(output),
+                "--no-labels",
+            ]
         )
-        self.assertIn("--model", result.stdout)
-        self.assertIn("--source", result.stdout)
-        self.assertNotIn("Traceback", result.stderr)
+    assert not output.exists()
 
-    def test_filesystem_source_is_preserved(self):
-        factory = Mock()
-        factory.return_value.run.return_value = "output.mp4"
-        with contextlib.redirect_stdout(io.StringIO()):
-            main(["--model", "weights/model.pt", "--source", "videos/input video.mp4",
-                  "--output", "output folder/result.mp4", "--headless"],
-                 visualizer_class=factory)
-        factory.return_value.run.assert_called_once_with(
-            "videos/input video.mp4", "output folder/result.mp4", show_window=False,
+
+def test_cli_demo_and_hide_conf_share_the_public_options(monkeypatch, image, tmp_path, capsys):
+    import numpy as np
+
+    captured = []
+    result = NS(
+        orig_img=image,
+        names={0: "person"},
+        boxes=NS(data=np.array([[20.0, 20.0, 70.0, 70.0, 0.9, 0.0]])),
+    )
+
+    def predictions(*args, **options):
+        assert options["task"] == "segment"
+        return iter([result])
+
+    monkeypatch.setattr("ultraviz.cli.predict", predictions)
+    monkeypatch.setattr(
+        "ultraviz.annotation.Annotator._labels",
+        lambda self, frame, labels: captured.extend(text for text, *_ in labels) or frame,
+    )
+    assert (
+        main(
+            [
+                "--no-summary",
+                "--model",
+                "unused.pt",
+                "--source",
+                "image.jpg",
+                "--output",
+                str(tmp_path / "out.png"),
+                "--demo",
+                "segment",
+                "--hide-conf",
+                "--timing",
+                "console",
+            ]
         )
+        == 0
+    )
+    assert captured == ["person"]
+    assert "inference: n/a" in capsys.readouterr().out
 
-    def test_base_import_does_not_load_ultralytics(self):
-        subprocess.run(
-            [sys.executable, "-c", "import sys; from ultiviz import Visualizer; "
-             "assert 'ultralytics' not in sys.modules; Visualizer()"],
-            check=True, capture_output=True, text=True,
+
+def test_cli_summary_options_and_console_timing(monkeypatch, image, arial, tmp_path, capsys):
+    from PIL import Image
+
+    monkeypatch.setattr(
+        "ultraviz.cli.predict", lambda *a, **k: iter([NS(orig_img=image, names={})])
+    )
+    output = tmp_path / "summary.png"
+    assert (
+        main(
+            [
+                "--model",
+                "unused.pt",
+                "--source",
+                "in.jpg",
+                "--output",
+                str(output),
+                "--no-labels",
+                "--summary",
+                "--summary-title",
+                "Inspection",
+                "--summary-width",
+                "100",
+                "--summary-columns",
+                "1",
+                "--timing",
+            ]
         )
+        == 0
+    )
+    assert Image.open(output).getbbox() is not None
+    assert "visualization:" in capsys.readouterr().out
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_cli_default_summary_is_visible_in_heatmap_without_flag(
+    monkeypatch, image, arial, tmp_path
+):
+    from ultraviz.summary import SummaryPanel
+
+    captured = []
+    original = SummaryPanel.draw
+
+    def capture(self, image, summary, style, font):
+        captured.append(
+            (summary.task, style.summary, style.boxes, style.labels, style.summary_subtitle)
+        )
+        return original(self, image, summary, style, font)
+
+    monkeypatch.setattr(SummaryPanel, "draw", capture)
+    monkeypatch.setattr(
+        "ultraviz.cli.predict", lambda *a, **k: iter([NS(orig_img=image, names={})])
+    )
+    assert (
+        main(
+            [
+                "--model",
+                "unused.pt",
+                "--source",
+                "in.jpg",
+                "--output",
+                str(tmp_path / "heatmap.png"),
+                "--demo",
+                "heatmap",
+                "--summary-subtitle",
+                "Camera 01",
+            ]
+        )
+        == 0
+    )
+    assert captured == [("heatmap", True, False, False, "Camera 01")]
