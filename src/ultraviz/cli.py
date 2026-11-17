@@ -21,13 +21,21 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--demo", choices=DEMOS)
     parser.add_argument("--hide-conf", action="store_true")
-    parser.add_argument("--summary", action="store_true", help="Show task metrics in the top right")
+    parser.add_argument(
+        "--summary",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Show task metrics in the top right (default: enabled)",
+    )
     parser.add_argument("--summary-title")
     parser.add_argument("--summary-width", type=int)
     parser.add_argument("--summary-columns", type=int, default=2)
     parser.add_argument("--summary-margin", type=int, default=16)
     parser.add_argument("--summary-opacity", type=float, default=0.92)
     parser.add_argument("--depth-opacity", type=float, default=0.45)
+    parser.add_argument("--heatmap-opacity", type=float, default=0.72)
+    parser.add_argument("--heatmap-radius", type=float)
+    parser.add_argument("--heatmap-contours", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
         "--timing",
         nargs="?",
@@ -74,7 +82,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
                 save=args.output,
                 fps=args.fps if args.fps is not None else 30,
                 overwrite=args.overwrite,
-                labels=not args.no_labels,
+                labels=not args.no_labels and args.demo != "heatmap",
                 show_conf=not args.hide_conf,
                 timing=args.timing,
                 summary=args.summary,
@@ -84,6 +92,9 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
                 summary_margin=args.summary_margin,
                 summary_opacity=args.summary_opacity,
                 depth_opacity=args.depth_opacity,
+                heatmap_opacity=args.heatmap_opacity,
+                heatmap_radius=args.heatmap_radius,
+                heatmap_contours=args.heatmap_contours,
                 demo=args.demo,
                 font_path=args.font,
             ),

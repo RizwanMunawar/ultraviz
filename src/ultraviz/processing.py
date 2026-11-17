@@ -136,6 +136,9 @@ def _configure(
         if "show_conf" in style_options:
             raise ValueError("Use show_conf once; confidence is its legacy alias")
         style_options["show_conf"] = style_options.pop("confidence")
+    if style is None and style_options.get("demo") == "heatmap":
+        for layer in ("boxes", "labels", "masks", "pose", "trails"):
+            style_options.setdefault(layer, False)
     on_timing = style_options.pop("on_timing", None)
     return Annotator(
         replace(style, **style_options) if style else Style(**style_options), on_timing=on_timing

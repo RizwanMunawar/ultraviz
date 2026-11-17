@@ -12,7 +12,7 @@ from ultraviz.branding import PALETTE, color, text_color
 
 def test_detection_does_not_mutate_input(image, style):
     item = Instance(0, 0.9, name="person", box=(20, 20, 70, 70))
-    output = process(Prediction(image, (item,)), style=replace(style, line_width=2))
+    output = process(Prediction(image, (item,)), style=replace(style, line_width=2), summary=False)
     assert tuple(output[20, 40]) == color(0)[::-1]
     assert not image.any()
     assert output is not image
@@ -23,7 +23,9 @@ def test_masks_preserve_holes(image, style):
     mask[10:80, 10:80] = True
     mask[30:60, 30:60] = False
     output = process(
-        Prediction(image, (Instance(0, mask=mask),)), style=replace(style, mask_opacity=1)
+        Prediction(image, (Instance(0, mask=mask),)),
+        style=replace(style, mask_opacity=1),
+        summary=False,
     )
     assert tuple(output[15, 15]) == color(0)[::-1]
     assert not output[40, 40].any()
@@ -32,7 +34,7 @@ def test_masks_preserve_holes(image, style):
 
 def test_obb_corners(image, style):
     corners = np.array([[40, 10], [80, 40], [50, 80], [10, 50]])
-    output = process(Prediction(image, (Instance(3, corners=corners),)), style=style)
+    output = process(Prediction(image, (Instance(3, corners=corners),)), style=style, summary=False)
     assert output[25, 60].any()  # Rotated edge remains correctly positioned.
     assert not output[10, 40].any()  # The original sharp vertex is rounded away.
     assert not output[10, 10].any()
@@ -41,14 +43,16 @@ def test_obb_corners(image, style):
 def test_pose_topology_confidence_and_unknown_layout(image, style):
     points = np.array([[20, 30, 0.9], [80, 30, 0.9], [80, 80, 0.1]])
     item = Instance(0, keypoints=points)
-    output = process(Prediction(image, (item,)), style=replace(style, skeleton=((0, 1), (1, 2))))
+    output = process(
+        Prediction(image, (item,)), style=replace(style, skeleton=((0, 1), (1, 2))), summary=False
+    )
     assert output[30, 50].any()
     assert not output[55, 80].any()
-    output = process(Prediction(image, (item,)), style=style)
+    output = process(Prediction(image, (item,)), style=style, summary=False)
     assert output[30, 20].any()
     assert not output[30, 50].any()
     with pytest.raises(ValueError, match="skeleton index"):
-        process(Prediction(image, (item,)), style=replace(style, skeleton=((0, 3),)))
+        process(Prediction(image, (item,)), style=replace(style, skeleton=((0, 3),)), summary=False)
 
 
 def tracked(image, x, source="video.mp4"):
@@ -56,7 +60,9 @@ def tracked(image, x, source="video.mp4"):
 
 
 def test_tracking_history_reset_and_expiry(image, style):
-    visualizer = Visualizer(replace(style, boxes=False, trail_length=2, trail_max_gap=1))
+    visualizer = Visualizer(
+        replace(style, boxes=False, trail_length=2, trail_max_gap=1), summary=False
+    )
     visualizer(tracked(image, 10))
     output = visualizer(tracked(image, 70))
     assert output[35, 40].any()
@@ -73,7 +79,9 @@ def test_tracking_history_reset_and_expiry(image, style):
 def test_filters(image, style):
     items = (Instance(0, 0.8, box=(10, 10, 40, 40)), Instance(1, 0.1, box=(50, 50, 70, 70)))
     output = process(
-        Prediction(image, items), style=replace(style, classes=frozenset({1}), min_confidence=0.5)
+        Prediction(image, items),
+        style=replace(style, classes=frozenset({1}), min_confidence=0.5),
+        summary=False,
     )
     assert not output.any()
 
@@ -89,7 +97,7 @@ def test_stream_is_lazy_and_closes(image, style):
         finally:
             events.append("closed")
 
-    frames = Visualizer(style).stream(results())
+    frames = Visualizer(style, summary=False).stream(results())
     assert not events
     next(frames)
     assert events == ["next"]
@@ -100,7 +108,9 @@ def test_stream_is_lazy_and_closes(image, style):
 def test_semantic_ignore_ids(image, style):
     semantic = np.full(image.shape[:2], 255)
     semantic[:20, :20] = 3
-    output = process(Prediction(image, semantic=semantic), style=replace(style, mask_opacity=1))
+    output = process(
+        Prediction(image, semantic=semantic), style=replace(style, mask_opacity=1), summary=False
+    )
     assert tuple(output[5, 5]) == color(3)[::-1]
     assert not output[50, 50].any()
 
@@ -109,7 +119,7 @@ def test_depth_invalid_and_constant(image, style):
     depth = np.ones(image.shape[:2])
     depth[0, 0] = np.nan
     depth[0, 1] = np.inf
-    output = process(Prediction(image, depth=depth), style=style)
+    output = process(Prediction(image, depth=depth), style=style, summary=False)
     assert not output[0, :2].any()
     assert output[30, 30].any()
     assert np.array_equal(output[30, 30], output[50, 50])
@@ -117,11 +127,13 @@ def test_depth_invalid_and_constant(image, style):
 
 def test_empty_noncontiguous_image(image, style):
     view = image[:, ::-1]
-    assert np.array_equal(process(Prediction(view), style=style), view)
+    assert np.array_equal(process(Prediction(view), style=style, summary=False), view)
 
 
 def test_arial_label_and_unicode(image, arial):
-    output = process(Prediction(image, (Instance(0, name="café", box=(20, 40, 100, 70)),)))
+    output = process(
+        Prediction(image, (Instance(0, name="café", box=(20, 40, 100, 70)),)), summary=False
+    )
     assert ((output == np.array(color(0)[::-1])).all(axis=2)).any()
 
 
@@ -146,7 +158,7 @@ def test_palette_contrast():
 )
 def test_style_validation(option, value):
     with pytest.raises(ValueError):
-        Style(**{option: value})
+        Style(**{option: value}, summary=False)
 
 
 @pytest.mark.parametrize(
@@ -199,7 +211,7 @@ def test_missing_arial_error(tmp_path):
     from ultraviz.style import load_font
 
     with pytest.raises(FileNotFoundError, match="Arial is required"):
-        load_font(Style(font_path=tmp_path / "missing.ttf"))
+        load_font(Style(font_path=tmp_path / "missing.ttf", summary=False))
 
 
 def test_dense_single_row_not_squeezed():
@@ -215,7 +227,7 @@ def test_bad_adapter_image():
 
 
 def test_call_accepts_prediction_list_and_tuple(image, style):
-    renderer = Visualizer(style)
+    renderer = Visualizer(style, summary=False)
     item = Prediction(image, (Instance(0, box=(20, 20, 70, 70)),))
     for batch in ([item], (item,), [item, item], []):
         frames = renderer(batch)
@@ -236,7 +248,7 @@ def test_call_accepts_stream_lazily_and_closes(image, style):
         finally:
             events.append("closed")
 
-    frames = Visualizer(style)(results())
+    frames = Visualizer(style, summary=False)(results())
     assert not events
     assert next(frames).shape == image.shape
     frames.close()
@@ -245,7 +257,7 @@ def test_call_accepts_stream_lazily_and_closes(image, style):
 
 def test_configuration_requires_style():
     with pytest.raises(TypeError, match="Style configuration"):
-        Visualizer(object())
+        Visualizer(object(), summary=False)
 
 
 def test_font_family_is_verified(monkeypatch, tmp_path):
@@ -258,11 +270,11 @@ def test_font_family_is_verified(monkeypatch, tmp_path):
         lambda *args: NS(getname=lambda: ("Archivo", "Regular")),
     )
     with pytest.raises(ValueError, match="require Arial"):
-        load_font(Style(font_path=font_path))
+        load_font(Style(font_path=font_path, summary=False))
 
 
 def test_batch_calls_reset_trails(image, style):
-    visualizer = Visualizer(replace(style, boxes=False))
+    visualizer = Visualizer(replace(style, boxes=False), summary=False)
     visualizer([tracked(image, 10)])
     assert not visualizer([tracked(image, 70)])[0].any()
     # Incremental single-result calls still retain trails.
@@ -271,8 +283,8 @@ def test_batch_calls_reset_trails(image, style):
 
 def test_rounded_box_corners_and_square_override(image, style):
     item = Prediction(image, (Instance(0, box=(20, 20, 80, 80)),))
-    rounded = process(item, style=replace(style, line_width=1, corner_radius=12))
-    square = process(item, style=replace(style, line_width=1, corner_radius=0))
+    rounded = process(item, style=replace(style, line_width=1, corner_radius=12), summary=False)
+    square = process(item, style=replace(style, line_width=1, corner_radius=0), summary=False)
     assert not rounded[20, 20].any()
     assert square[20, 20].any()
     assert rounded[20, 50].any()
@@ -282,7 +294,7 @@ def test_rounded_box_corners_and_square_override(image, style):
 def test_auto_font_size_and_rounded_labels(arial):
     small = np.zeros((360, 640, 3), np.uint8)
     large = np.zeros((1080, 1920, 3), np.uint8)
-    visualizer = Visualizer(boxes=False)
+    visualizer = Visualizer(boxes=False, summary=False)
     item = Instance(0, name="person", box=(80, 80, 200, 200))
     small_output = visualizer(Prediction(small, (item,)))
     small_size = visualizer._annotator._font.size
@@ -292,13 +304,13 @@ def test_auto_font_size_and_rounded_labels(arial):
     assert large_size == 30
     assert not small_output[80, 80].any()  # Rounded bottom left of the label fill.
     assert small_output.any() and large_output.any()
-    explicit = Visualizer(font_size=16)
+    explicit = Visualizer(font_size=16, summary=False)
     explicit(Prediction(large, (item,)))
     assert explicit._annotator._font.size == 16
 
 
 @pytest.mark.parametrize("box", [(0, 0, 1, 1), (-10, -10, 20, 20), (40, 20, 40, 80)])
 def test_tiny_clipped_and_degenerate_rounded_boxes(image, style, box):
-    output = process(Prediction(image, (Instance(0, box=box),)), style=style)
+    output = process(Prediction(image, (Instance(0, box=box),)), style=style, summary=False)
     assert output.shape == image.shape
     assert output.dtype == np.uint8

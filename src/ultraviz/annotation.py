@@ -15,6 +15,7 @@ from PIL import ImageDraw, ImageFont
 from .adaptor import from_ultralytics
 from .branding import DARK_BLUE, NEON_PINK, NEON_YELLOW, RGB, color, text_color
 from .geometry import rounded_polygon, rounded_rectangle
+from .heatmap import blend_heatmap
 from .predictions import Array, Image, Instance, Prediction, validate_image
 from .style import COCO_SKELETON, Style, load_font
 from .summary import FrameSummary, SummaryPanel, frame_summary
@@ -136,9 +137,10 @@ class Annotator:
             if isinstance(result, Prediction)
             else from_ultralytics(
                 result,
-                include_masks=self.style.summary
+                include_masks=(self.style.summary and self.style.demo in (None, "segment"))
                 or (self.style.masks and self.style.mask_opacity > 0),
-                include_keypoints=self.style.pose or self.style.summary,
+                include_keypoints=self.style.pose
+                or (self.style.summary and self.style.demo in (None, "pose")),
             )
         )
         sequence = (prediction.source, prediction.image.shape)
@@ -408,21 +410,13 @@ class Annotator:
         for x, y in centers:
             if 0 <= x < width and 0 <= y < height:
                 self._density[int(y) // 8, int(x) // 8] += 1
-        if self.style.mask_opacity == 0 or not self._density.any():
-            return
-        smooth = cv2.GaussianBlur(self._density.astype(np.float32), (0, 0), 2.0)
-        intensity = smooth / max(float(np.max(smooth)), 1e-12)
-        rgb = np.asarray(color(0), dtype=np.float32) + intensity[:, :, None] * (
-            np.asarray(NEON_PINK, dtype=np.float32) - np.asarray(color(0), dtype=np.float32)
+        blend_heatmap(
+            image,
+            self._density,
+            radius=self.style.heatmap_radius,
+            opacity=self.style.heatmap_opacity,
+            contours=self.style.heatmap_contours,
         )
-        tint = cv2.resize(np.rint(rgb[:, :, ::-1]).astype(np.uint8), (width, height))
-        alpha = (
-            cv2.resize(np.sqrt(intensity), (width, height))[:, :, None] * self.style.mask_opacity
-        )
-        blended = image.astype(np.float32)
-        blended *= 1 - alpha
-        blended += tint * alpha
-        image[:] = np.rint(blended)
 
     def _font_for_size(self, size: int) -> ImageFont.FreeTypeFont:
         """Reuse a bounded set of Arial sizes for mixed object dimensions."""

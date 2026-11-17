@@ -21,7 +21,7 @@ def test_demo_selects_matching_inference_mode(demo):
         predict=lambda **options: calls.append("predict") or iter(["result"]),
         track=lambda **options: calls.append("track") or iter(["result"]),
     )
-    source = Visualizer("input.mp4", model=model, demo=demo)
+    source = Visualizer("input.mp4", model=model, demo=demo, summary=False)
     assert next(source) == "result"
     assert calls == ["track" if demo == "track" else "predict"]
     assert source.model is model
@@ -30,9 +30,9 @@ def test_demo_selects_matching_inference_mode(demo):
 
 def test_unknown_demo_and_conflicting_task_fail_early():
     with pytest.raises(ValueError, match="demo must be one of"):
-        Visualizer(demo="unknown")
+        Visualizer(demo="unknown", summary=False)
     with pytest.raises(ValueError, match="demo and task"):
-        Visualizer(task="pose", demo="segment")
+        Visualizer(task="pose", demo="segment", summary=False)
 
 
 def test_inline_model_construction_is_reused_without_reloading(monkeypatch):
@@ -45,7 +45,7 @@ def test_inline_model_construction_is_reused_without_reloading(monkeypatch):
         "predict",
         lambda passed, *args, **kwargs: seen.append(passed) or iter(["first", "second"]),
     )
-    source = Visualizer("input.mp4", model=model, demo="detect")
+    source = Visualizer("input.mp4", model=model, demo="detect", summary=False)
     assert list(source) == ["first", "second"]
     assert seen == [model]
 
@@ -58,20 +58,20 @@ def test_show_conf_only_changes_text(image, monkeypatch):
         lambda self, frame, labels: captured.extend(text for text, *_ in labels) or frame,
     )
     prediction = Prediction(image, (Instance(0, name="person", confidence=0.87),))
-    visualizer = Visualizer(show_conf=False)
+    visualizer = Visualizer(show_conf=False, summary=False)
     visualizer(prediction)
     assert captured == ["person"]
     assert visualizer.count == 1
     assert prediction.instances[0].confidence == 0.87
-    assert Visualizer(confidence=False).style.show_conf is False
+    assert Visualizer(confidence=False, summary=False).style.show_conf is False
     with pytest.raises(ValueError, match="legacy alias"):
-        Visualizer(confidence=False, show_conf=True)
+        Visualizer(confidence=False, show_conf=True, summary=False)
 
 
 def test_default_label_touches_box_while_retaining_padding(arial):
     image = np.zeros((360, 640, 3), np.uint8)
     prediction = Prediction(image, (Instance(0, name="person", box=(100, 150, 300, 300)),))
-    visualizer = Visualizer(show_conf=False)
+    visualizer = Visualizer(show_conf=False, summary=False)
     output = visualizer(prediction)
     assert visualizer.style.label_margin == 0
     assert visualizer.style.label_padding == 6
@@ -79,24 +79,27 @@ def test_default_label_touches_box_while_retaining_padding(arial):
 
 
 def test_default_font_and_line_width_consider_image_and_box_sizes():
-    style = Style()
+    style = Style(summary=False)
     assert style.resolved_line_width((1080, 1920)) == 4
     assert style.resolved_line_width((2160, 3840)) == 8
     assert style.resolved_line_width((2160, 3840), (20, 12)) == 1
     assert style.resolved_font_size((1080, 1920)) == 30
-    assert Style(line_width=4, font_size=24).resolved_line_width((96, 128), (20, 12)) == 4
-    assert Style(font_size=24).resolved_font_size((96, 128)) == 24
+    assert (
+        Style(line_width=4, font_size=24, summary=False).resolved_line_width((96, 128), (20, 12))
+        == 4
+    )
+    assert Style(font_size=24, summary=False).resolved_font_size((96, 128)) == 24
 
 
 def test_trails_keep_at_most_ten_actual_frames(image):
-    visualizer = Visualizer(labels=False, boxes=False)
+    visualizer = Visualizer(labels=False, boxes=False, summary=False)
     for index in range(30):
         visualizer(Prediction(image, (Instance(0, track_id=7, box=(index, 20, index + 5, 30)),)))
     points = visualizer._annotator._tracks[(0, 7)][1]
     assert len(points) == 10
     assert points[-1][0] - points[0][0] == 9
     with pytest.raises(ValueError, match="between 1 and 10"):
-        Style(trail_length=11)
+        Style(trail_length=11, summary=False)
     # Missing detections must not stretch a trail across more than ten frames.
     for _ in range(9):
         visualizer(Prediction(image))
@@ -106,7 +109,9 @@ def test_trails_keep_at_most_ten_actual_frames(image):
 
 def test_depth_uses_exact_yellow_to_pink_endpoints(image):
     depth = np.linspace(0, 1, image.shape[1])[None, :].repeat(image.shape[0], axis=0)
-    output = Visualizer(demo="depth", depth_opacity=1)(Prediction(image, depth=depth))
+    output = Visualizer(demo="depth", depth_opacity=1, summary=False)(
+        Prediction(image, depth=depth)
+    )
     assert tuple(output[0, 0]) == NEON_YELLOW[::-1]
     assert tuple(output[0, -1]) == NEON_PINK[::-1]
 
@@ -118,7 +123,7 @@ def test_count_is_current_visible_objects_and_uses_shared_labels(image, monkeypa
         "_labels",
         lambda self, frame, labels: captured.extend(text for text, *_ in labels) or frame,
     )
-    visualizer = Visualizer(demo="count", min_confidence=0.5, show_conf=False)
+    visualizer = Visualizer(demo="count", min_confidence=0.5, show_conf=False, summary=False)
     visualizer(Prediction(image, (Instance(0, confidence=0.9), Instance(1, confidence=0.2))))
     assert visualizer.count == 1
     assert "Count: 1" in captured
@@ -128,7 +133,7 @@ def test_count_is_current_visible_objects_and_uses_shared_labels(image, monkeypa
 
 
 def test_heatmap_has_bounded_spatial_history_and_resets(image):
-    visualizer = Visualizer(demo="heatmap", boxes=False, labels=False)
+    visualizer = Visualizer(demo="heatmap", boxes=False, labels=False, summary=False)
     prediction = Prediction(image, (Instance(0, box=(30, 30, 50, 50)),))
     first = visualizer(prediction)
     for _ in range(20):
@@ -144,13 +149,15 @@ def test_heatmap_has_bounded_spatial_history_and_resets(image):
 @pytest.mark.parametrize("demo", ["count", "heatmap"])
 def test_instance_demos_reject_dense_model_outputs(image, demo):
     with pytest.raises(ValueError, match="instance predictions"):
-        Visualizer(demo=demo)(Prediction(image, semantic=np.zeros(image.shape[:2], int)))
+        Visualizer(demo=demo, summary=False)(
+            Prediction(image, semantic=np.zeros(image.shape[:2], int))
+        )
 
 
 def test_rotated_label_attaches_to_actual_rounded_outline(arial):
     image = np.zeros((400, 400, 3), np.uint8)
     corners = np.array([[200.0, 150.0], [250.0, 200.0], [200.0, 250.0], [150.0, 200.0]])
-    output = Visualizer(show_conf=False)(
+    output = Visualizer(show_conf=False, summary=False)(
         Prediction(image, (Instance(0, name="car", corners=corners),))
     )
     assert output[151:155, 200].any(axis=1).all()

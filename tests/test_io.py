@@ -21,7 +21,10 @@ def test_image_roundtrip(image, tmp_path):
 def test_video_roundtrip(image, style, tmp_path, extension):
     output = tmp_path / ("video" + extension)
     summary = save_video(
-        (Prediction(image + i * 30) for i in range(4)), output, fps=12, visualizer=Visualizer(style)
+        (Prediction(image + i * 30) for i in range(4)),
+        output,
+        fps=12,
+        visualizer=Visualizer(style, summary=False),
     )
     assert summary.frames == 4
     assert summary.size == (128, 96)
@@ -54,7 +57,9 @@ def test_video_failure_preserves_output_and_closes(image, style, tmp_path):
             closed.append(True)
 
     with pytest.raises(ValueError, match="dimensions"):
-        save_video(results(), output, fps=30, visualizer=Visualizer(style), overwrite=True)
+        save_video(
+            results(), output, fps=30, visualizer=Visualizer(style, summary=False), overwrite=True
+        )
     assert closed == [True]
     assert output.read_bytes() == b"existing video"
     assert not list(tmp_path.glob(".ultraviz-*"))
@@ -68,7 +73,7 @@ def test_source_protected(image, style, tmp_path):
             [Prediction(image, source=str(output))],
             output,
             fps=30,
-            visualizer=Visualizer(style),
+            visualizer=Visualizer(style, summary=False),
             overwrite=True,
         )
     assert output.read_bytes() == b"input"
@@ -82,12 +87,15 @@ def test_invalid_fps(image, tmp_path, fps):
 
 def test_empty_video(style, tmp_path):
     with pytest.raises(ValueError, match="empty"):
-        save_video([], tmp_path / "out.avi", fps=30, visualizer=Visualizer(style))
+        save_video([], tmp_path / "out.avi", fps=30, visualizer=Visualizer(style, summary=False))
     assert not list(tmp_path.iterdir())
 
 
 def test_odd_dimensions(image, style, tmp_path):
     with pytest.raises(ValueError, match="even"):
         save_video(
-            [Prediction(image[:, :127])], tmp_path / "out.mp4", fps=30, visualizer=Visualizer(style)
+            [Prediction(image[:, :127])],
+            tmp_path / "out.mp4",
+            fps=30,
+            visualizer=Visualizer(style, summary=False),
         )

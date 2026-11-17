@@ -14,12 +14,12 @@ def image():
 
 @pytest.fixture
 def style():
-    return Style(labels=False)
+    return Style(labels=False, summary=False)
 
 
 @pytest.fixture
 def arial():
     try:
-        return load_font(Style())
+        return load_font(Style(summary=False))
     except FileNotFoundError:
         pytest.skip("Licensed Arial is not installed")

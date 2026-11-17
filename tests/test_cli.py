@@ -9,14 +9,14 @@ from ultraviz.cli import run_cli as main
 
 def test_help(capsys):
     with pytest.raises(SystemExit) as exc:
-        main(["--help"])
+        main(["--no-summary", "--help"])
     assert exc.value.code == 0
     assert "Ultraviz" in capsys.readouterr().out
 
 
 def test_video_requires_fps():
     with pytest.raises(SystemExit) as exc:
-        main(["--model", "model.pt", "--source", "in.mp4", "--output", "out.mp4"])
+        main(["--no-summary", "--model", "model.pt", "--source", "in.mp4", "--output", "out.mp4"])
     assert exc.value.code == 2
 
 
@@ -25,7 +25,18 @@ def test_image(monkeypatch, image, tmp_path):
     monkeypatch.setattr("ultraviz.cli.predict", lambda *args, **kwargs: iter([result]))
     output = tmp_path / "image.png"
     assert (
-        main(["--model", "model.pt", "--source", "in.png", "--output", str(output), "--no-labels"])
+        main(
+            [
+                "--no-summary",
+                "--model",
+                "model.pt",
+                "--source",
+                "in.png",
+                "--output",
+                str(output),
+                "--no-labels",
+            ]
+        )
         == 0
     )
     assert output.is_file()
@@ -36,7 +47,18 @@ def test_multiple_frames_do_not_publish(monkeypatch, image, tmp_path):
     monkeypatch.setattr("ultraviz.cli.predict", lambda *args, **kwargs: iter([result, result]))
     output = tmp_path / "image.png"
     with pytest.raises(SystemExit):
-        main(["--model", "model.pt", "--source", "in.mp4", "--output", str(output), "--no-labels"])
+        main(
+            [
+                "--no-summary",
+                "--model",
+                "model.pt",
+                "--source",
+                "in.mp4",
+                "--output",
+                str(output),
+                "--no-labels",
+            ]
+        )
     assert not output.exists()
 
 
@@ -62,6 +84,7 @@ def test_cli_demo_and_hide_conf_share_the_public_options(monkeypatch, image, tmp
     assert (
         main(
             [
+                "--no-summary",
                 "--model",
                 "unused.pt",
                 "--source",
@@ -112,3 +135,37 @@ def test_cli_summary_options_and_console_timing(monkeypatch, image, arial, tmp_p
     )
     assert Image.open(output).getbbox() is not None
     assert "visualization:" in capsys.readouterr().out
+
+
+def test_cli_default_summary_is_visible_in_heatmap_without_flag(
+    monkeypatch, image, arial, tmp_path
+):
+    from ultraviz.summary import SummaryPanel
+
+    captured = []
+    original = SummaryPanel.draw
+
+    def capture(self, image, summary, style, font):
+        captured.append((summary.task, style.summary, style.boxes, style.labels))
+        return original(self, image, summary, style, font)
+
+    monkeypatch.setattr(SummaryPanel, "draw", capture)
+    monkeypatch.setattr(
+        "ultraviz.cli.predict", lambda *a, **k: iter([NS(orig_img=image, names={})])
+    )
+    assert (
+        main(
+            [
+                "--model",
+                "unused.pt",
+                "--source",
+                "in.jpg",
+                "--output",
+                str(tmp_path / "heatmap.png"),
+                "--demo",
+                "heatmap",
+            ]
+        )
+        == 0
+    )
+    assert captured == [("heatmap", True, False, False)]

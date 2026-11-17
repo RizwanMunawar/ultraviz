@@ -31,7 +31,7 @@ def test_real_results_all_tasks(image, style):
         results.Results(**common, probs=torch.tensor([0.2, 0.8])),
         results.Results(**common, boxes=torch.empty((0, 6))),
     ]
-    renderer = Visualizer(style)
+    renderer = Visualizer(style, summary=False)
     for result in fixtures:
         output = renderer(result)
         assert output.shape == image.shape
@@ -39,8 +39,8 @@ def test_real_results_all_tasks(image, style):
     for frames in (
         renderer(fixtures),
         renderer(iter(fixtures)),
-        process(fixtures, style=style),
-        process(iter(fixtures), style=style),
+        process(fixtures, style=style, summary=False),
+        process(iter(fixtures), style=style, summary=False),
     ):
         frames = list(frames)
         assert len(frames) == len(fixtures)
@@ -85,9 +85,9 @@ def test_real_dense_results(image, style):
         results.Results(**common, semantic_mask=semantic),
         results.Results(**common, depth=depth),
     ):
-        renderer = Visualizer(style)
+        renderer = Visualizer(style, summary=False)
         assert renderer(result).any()
-        assert process(result, style=style).any()
-        assert next(process(iter([result]), style=style)).any()
+        assert process(result, style=style, summary=False).any()
+        assert next(process(iter([result]), style=style, summary=False)).any()
         assert renderer([result])[0].any()
         assert next(renderer(iter([result]))).any()

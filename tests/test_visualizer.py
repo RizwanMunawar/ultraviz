@@ -15,7 +15,7 @@ from ultraviz import Instance, Prediction, Visualizer, from_ultralytics
 )
 def test_dictionary_and_namespace_are_not_modified(args, image):
     before = vars(args).copy() if isinstance(args, Namespace) else args.copy()
-    visualizer = Visualizer(args, line_width=3)
+    visualizer = Visualizer(args, line_width=3, summary=False)
     assert visualizer.style.line_width == 3
     assert visualizer.style.labels is False
     assert (vars(args) if isinstance(args, Namespace) else args) == before
@@ -24,7 +24,7 @@ def test_dictionary_and_namespace_are_not_modified(args, image):
 
 def test_reuses_cached_font_between_calls(image, arial):
     result = Prediction(image, (Instance(0, name="person", box=(20, 30, 80, 80)),))
-    visualizer = Visualizer(font_size=18)
+    visualizer = Visualizer(font_size=18, summary=False)
     visualizer(result)
     font = visualizer._annotator._font
     visualizer(result)
@@ -88,10 +88,10 @@ def test_disabled_layers_skip_tensor_conversion_for_render_and_export(image, tmp
         semantic_mask=SimpleNamespace(data=UnavailableTensor()),
     )
     options = {"masks": False, "pose": False, "labels": False}
-    assert Visualizer(options)(result).any()
-    summary = Visualizer(options, save=tmp_path / "frame.png")(result)
+    assert Visualizer(options, summary=False)(result).any()
+    summary = Visualizer(options, save=tmp_path / "frame.png", summary=False)(result)
     assert summary.frames == 1
-    summary = Visualizer(options, save=tmp_path / "video.avi")([result])
+    summary = Visualizer(options, save=tmp_path / "video.avi", summary=False)([result])
     assert summary.frames == 1
 
 
@@ -107,7 +107,7 @@ def test_disabled_layers_skip_tensor_conversion_for_render_and_export(image, tmp
     ],
 )
 def test_automatic_sizes_follow_resolution_in_both_orientations(height, width, line, font):
-    style = Visualizer().style
+    style = Visualizer(summary=False).style
     for shape in ((height, width), (width, height)):
         assert style.resolved_line_width(shape) == line
         assert style.resolved_font_size(shape) == font
@@ -119,7 +119,7 @@ def test_portrait_and_landscape_render_with_same_font_and_outline(arial, monkeyp
         "ultraviz.annotation.Annotator._outline",
         lambda self, image, path, bgr, line: widths.append(line),
     )
-    visualizer = Visualizer(show_conf=False)
+    visualizer = Visualizer(show_conf=False, summary=False)
     sizes = []
     for shape in ((720, 1280), (1280, 720), (1080, 1920), (1920, 1080)):
         height, width = shape
@@ -133,8 +133,8 @@ def test_portrait_and_landscape_render_with_same_font_and_outline(arial, monkeyp
 
 
 def test_fixed_overrides_and_tiny_object_limits_on_large_images():
-    automatic = Visualizer().style
-    fixed = Visualizer(line_width=1, font_size=20).style
+    automatic = Visualizer(summary=False).style
+    fixed = Visualizer(line_width=1, font_size=20, summary=False).style
     for shape in ((720, 1280), (1080, 1920), (7680, 4320)):
         assert fixed.resolved_line_width(shape) == 1
         assert fixed.resolved_font_size(shape) == 20
@@ -162,7 +162,7 @@ def test_small_and_large_object_labels_keep_default_thirty_pixel_font(shape, ari
             Instance(2, name="large", box=(400, 300, 700, 600)),
         ),
     )
-    visualizer = Visualizer(show_conf=False)
+    visualizer = Visualizer(show_conf=False, summary=False)
     frame = visualizer.annotate(result)
     assert font_sizes and set(font_sizes) == {30}
     assert visualizer._annotator._font.getname()[0] == "Arial"

@@ -100,8 +100,9 @@ for frame in process(results):
 The source's style is inherited by `process`, and explicit style options can
 override it. `show` and `save` on `process` control that operation; the source's
 show/save settings apply when you call `results()` directly.
-Already annotated BGR arrays or frame iterators can also be passed to `process`
-for display or export, without running inference or drawing annotations again.
+Already annotated BGR arrays or frame iterators can also be passed to
+`process(frames, summary=False, show=True)` for display without running inference
+or replacing an existing task summary with raw frame dimensions.
 
 ## Install
 
@@ -147,13 +148,16 @@ print(summary.frames, summary.output, summary.stopped)
 | `label_padding` | `6` | Pixels of space on each side of label text |
 | `label_margin` | `0` | Labels touch boxes by default; a positive value adds a gap |
 | `font_path` | Automatic | Location of a licensed Arial font |
-| `mask_opacity` | `0.45` | Instance, semantic and heatmap overlay opacity |
+| `mask_opacity` | `0.45` | Instance and semantic overlay opacity |
+| `heatmap_opacity` | `0.72` | Maximum density overlay opacity |
+| `heatmap_radius` | Automatic | Gaussian spread in pixels, following 4.5% of the short edge by default |
+| `heatmap_contours` | `True` | Subtle contour accents at three relative activity levels |
 | `boxes`, `labels`, `masks`, `pose`, `trails` | `True` | Enable or disable annotation layers |
 | `show_conf` | `True` | Print confidence scores in untracked and classification labels |
 | `text_label_color` | `None` | Automatic contrast, or an explicit RGB tuple such as `(255, 255, 255)` |
 | `timing` | `False` | `True` or `"console"` logs per frame durations; never drawn on frames |
 | `depth_opacity` | `0.45` | Blend the yellow to pink depth map with the original scene |
-| `summary` | `False` | Enable the dynamic summary panel in the top right |
+| `summary` | `True` | Draw the task summary in the top right; False hides it |
 | `summary_title` | Automatic | Override the task heading |
 | `summary_items` | `None` | Mapping or callback adding/overriding metric cards |
 | `summary_width` | Automatic | Panel width in pixels, clamped to the image |
@@ -262,7 +266,8 @@ precedence over fields in a supplied Style.
 
 ## Dynamic task summary
 
-Enable the rounded summary panel with `summary=True`. All settings are direct
+The rounded summary panel is visible by default for every task and raw frame.
+Use `summary=False` to hide it. All settings are direct
 Visualizer arguments. The panel uses the Ultralytics dark blue background,
 neon yellow, mint, bright blue and pink cards, rounded corners, and Arial.
 It scales with the frame and stays in the top right. Long titles and values
@@ -402,7 +407,37 @@ summary = visualizer()
 Counting respects class and confidence filters and reports the current frame,
 not line crossings or unique lifetime identities. Heatmaps use a coarse spatial
 grid and never retain the video frames. `reset()` clears density and trails.
-`boxes=False` and `labels=False` give a heatmap without object overlays.
+Heatmap mode uses a smooth, transparent activity field with brand dark blue,
+bright blue, aqua, mint, yellow and pink. Inactive areas stay unchanged. Subtle
+contours and a low to high activity legend make density levels easier to read.
+The radius scales with the image's shorter side, including portrait video.
+
+Heatmap mode hides object boxes, labels, masks, pose and trails by default when
+using direct arguments; the summary remains visible. Enable individual layers
+explicitly, e.g. `boxes=True, labels=True`. A supplied Style keeps its own layer
+settings. All heatmap adjustments are direct Visualizer arguments:
+
+```python
+visualizer = Visualizer(
+    "1.mp4",
+    model=model,
+    demo="heatmap",
+    heatmap_opacity=0.72,
+    heatmap_radius=48,
+    heatmap_contours=True,
+    summary_title="Traffic activity",
+    summary_items={"Shift": "Morning"},
+    show=True,
+)
+visualizer()
+```
+
+The map displays accumulated detection center observations, normalized to the
+current peak density. It is relative activity, not a calibrated probability or
+a count of unique objects. Heatmap shading is independent of `mask_opacity`.
+Use `heatmap_opacity=0` to hide shading while keeping statistics. Use
+`summary=False` to hide the summary and legend. The CLI accepts
+`--heatmap-opacity`, `--heatmap-radius`, and `--no-heatmap-contours`.
 
 `show_conf=False` hides printed scores; it does not change model predictions or
 filtering. Use `inference={"conf": 0.4}` to set a model threshold. Tracked object
@@ -448,7 +483,8 @@ when the lazy source is first consumed. Existing Results objects always render
 according to their actual fields; task selection does not invent missing data.
 
 The console also supports `--demo count`, `--demo heatmap`, `--hide-conf` and
-`--summary`, `--summary-title "Vehicles summary"` and `--timing` for console logs.
+`--summary-title "Vehicles summary"`, `--no-summary` to hide the default panel,
+and `--timing` for console logs.
 Use `--task segment` or `--task track`; `--track` is retained
 for enabling tracking with an explicitly selected model task.
 
@@ -498,7 +534,7 @@ scale automatically.
 Explicit `font_size`, `line_width` and `keypoint_radius` values take precedence.
 Box outlines and label backgrounds are rounded by default as requested;
 `corner_radius=0` or `label_radius=0` restores square geometry. Missing Arial raises a setup error when labels
-are drawn; `labels=False` renders geometry without loading a font.
+are drawn; `labels=False, summary=False` renders geometry without loading a font.
 
 Class colors use the official twenty entry bounding box palette in its
 published order. Colors repeat after twenty classes and remain stable across

@@ -81,7 +81,8 @@ def test_task_metrics(task, expected, arial):
         depth=np.linspace(0, 1, 400)[None].repeat(240, axis=0) if task == "depth" else None,
         classifications=(("car", 0.9),) if task == "classify" else (),
     )
-    visualizer = Visualizer(demo=task, summary=True, labels=False)
+    visualizer = Visualizer(demo=task, labels=False)
+    assert visualizer.style.summary is True
     visualizer(prediction)
     assert visualizer.last_summary.task == task
     assert visualizer.last_summary.items == expected
@@ -137,7 +138,9 @@ def test_callback_invalid_values_fail_when_frame_is_consumed(image):
 
 def test_disabled_summary_skips_metrics_and_fonts(image, monkeypatch):
     monkeypatch.setattr("ultraviz.annotation.frame_summary", lambda *a: pytest.fail("No summary"))
-    visualizer = Visualizer(labels=False, summary_items=lambda state: pytest.fail("No callback"))
+    visualizer = Visualizer(
+        summary=False, labels=False, summary_items=lambda state: pytest.fail("No callback")
+    )
     visualizer(Prediction(image))
     assert visualizer.last_summary is None
 
@@ -147,18 +150,18 @@ def test_default_depth_blends_and_zero_opacity_preserves_pixels():
     image[5:] = 180
     depth = np.ones((10, 10))
     depth[0, 0] = np.nan
-    output = Visualizer()(Prediction(image, depth=depth))
+    output = Visualizer(summary=False)(Prediction(image, depth=depth))
     np.testing.assert_array_equal(output[0, 0], image[0, 0])
     assert (output[5] > output[4]).all()
     assert not np.array_equal(output[4], image[4])
     np.testing.assert_array_equal(
-        Visualizer(depth_opacity=0)(Prediction(image, depth=depth)), image
+        Visualizer(summary=False, depth_opacity=0)(Prediction(image, depth=depth)), image
     )
     np.testing.assert_array_equal(image[:5], 80)
 
 
 def test_raw_frame_summary_uses_dimensions_instead_of_fabricated_objects(image, arial):
-    visualizer = Visualizer(summary=True, labels=False)
+    visualizer = Visualizer(labels=False)
     visualizer(image)
     assert visualizer.last_summary.task == "frame"
     assert visualizer.last_summary.items == {"Width": image.shape[1], "Height": image.shape[0]}

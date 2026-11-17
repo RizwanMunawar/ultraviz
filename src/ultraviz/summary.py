@@ -13,6 +13,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 from .branding import DARK_BLUE, NEON_PINK, NEON_YELLOW, WHITE, text_color
+from .heatmap import heatmap_lut
 from .predictions import Array, Image, Instance, Prediction
 
 if TYPE_CHECKING:
@@ -165,7 +166,9 @@ class SummaryPanel:
             pad = max(2, round(size * 0.8))
             gap = max(2, size // 2)
             card_height = size * 4
-            footer = size * 2 if summary.track_ids else 0
+            footer = (size * 2 if summary.track_ids else 0) + (
+                size * 3 if summary.task == "heatmap" else 0
+            )
             panel_height = pad * 2 + size * 2 + rows * card_height + max(0, rows - 1) * gap + footer
             if panel_height <= available_height or size == 1:
                 break
@@ -215,6 +218,33 @@ class SummaryPanel:
                 font_for_size(size + max(1, size // 2)),
                 text_color(rgb),
                 text_width,
+            )
+        if summary.task == "heatmap":
+            legend_y = pad + size * 2 + rows * card_height + max(0, rows - 1) * gap + gap
+            ramp = PILImage.fromarray(heatmap_lut()[:, 0, ::-1][None]).resize(
+                (max(1, panel_width - 2 * pad), max(1, size // 2))
+            )
+            canvas.paste(ramp, (pad, legend_y))
+            self._text(
+                draw,
+                (pad, legend_y + size),
+                "Low activity",
+                font_for_size(max(1, size * 3 // 4)),
+                WHITE,
+                (panel_width - 2 * pad) // 2,
+            )
+            high_font = font_for_size(max(1, size * 3 // 4))
+            high_text = "High activity"
+            self._text(
+                draw,
+                (
+                    max(pad, panel_width - pad - round(high_font.getlength(high_text))),
+                    legend_y + size,
+                ),
+                high_text,
+                high_font,
+                WHITE,
+                (panel_width - 2 * pad) // 2,
             )
         if summary.track_ids:
             text = "Track IDs: " + ", ".join(map(str, summary.track_ids))

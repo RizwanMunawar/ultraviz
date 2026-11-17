@@ -23,7 +23,7 @@ def test_mask_region_optimization_matches_full_frame_reference(image, opacity, l
         mask = np.asfortranarray(mask)
     expected = image.copy()
     expected[mask] = np.rint(image[mask] * (1 - opacity) + np.array([255, 42, 4]) * opacity)
-    output = Visualizer(labels=False, boxes=False, mask_opacity=opacity)(
+    output = Visualizer(labels=False, boxes=False, mask_opacity=opacity, summary=False)(
         Prediction(image, (Instance(0, mask=mask),))
     )
     assert np.array_equal(expected, output)
@@ -41,7 +41,7 @@ def test_boolean_options_and_missing_class_id_are_rejected():
     with pytest.raises(ValueError, match="class_id"):
         Instance(None)
     with pytest.raises(ValueError, match="labels must be a boolean"):
-        Style(labels="False")
+        Style(labels="False", summary=False)
 
 
 def test_classification_metadata_is_frozen(image):
@@ -55,7 +55,7 @@ def test_extreme_finite_depth_does_not_overflow(image):
     depth = np.zeros(image.shape[:2])
     depth[0, 0], depth[0, 1] = -1e308, 1e308
     with np.errstate(all="raise"):
-        output = Visualizer(labels=False)(Prediction(image, depth=depth))
+        output = Visualizer(labels=False, summary=False)(Prediction(image, depth=depth))
     assert output.any()
 
 
@@ -84,7 +84,7 @@ def test_preview_cleanup_error_still_closes_input(image, monkeypatch):
             events.append("closed")
 
     with pytest.raises(RuntimeError, match="cleanup failure"):
-        process(results(), show=True, labels=False)
+        process(results(), show=True, labels=False, summary=False)
     assert events == ["closed"]
 
 
@@ -95,6 +95,7 @@ def test_process_reuses_source_annotation_engine(image):
         "source.mp4",
         model=SimpleNamespace(predict=lambda **kwargs: iter([Prediction(image)])),
         labels=False,
+        summary=False,
     )
     source._annotator.marker = "original engine"
     frames = process(source)
@@ -110,7 +111,7 @@ def test_video_rejects_boolean_frame_rate(image, tmp_path):
 
 def test_large_label_sprites_have_a_byte_budget(arial):
     image = np.zeros((300, 4000, 3), np.uint8)
-    visualizer = Visualizer(font_size=64, confidence=False, boxes=False)
+    visualizer = Visualizer(font_size=64, confidence=False, boxes=False, summary=False)
     for i in range(20):
         visualizer(Prediction(image, (Instance(0, name=f"{i}:" + "x" * 60),)))
     engine = visualizer._annotator

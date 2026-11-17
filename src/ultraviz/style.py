@@ -44,7 +44,7 @@ class Style:
     """Rendering options with Ultralytics class colors and optional RGB text color.
 
     font_path must point to a licensed Arial TrueType font. No substitute font
-    is silently used. Disable labels if Arial is unavailable.
+    is silently used. Disable labels and summary if Arial is unavailable.
     """
 
     boxes: bool = True
@@ -53,7 +53,7 @@ class Style:
     text_label_color: RGB | None = None
     timing: bool | str = False
     demo: str | None = None
-    summary: bool = False
+    summary: bool = True
     summary_title: str | None = None
     summary_items: Mapping[str, Metric] | Callable[[FrameSummary], Mapping[str, Metric]] | None = (
         None
@@ -75,6 +75,9 @@ class Style:
     label_margin: int = 0
     font_path: str | Path | None = None
     mask_opacity: float = 0.45
+    heatmap_opacity: float = 0.72
+    heatmap_radius: float | None = None
+    heatmap_contours: bool = True
     keypoint_radius: int | None = None
     keypoint_confidence: float = 0.25
     skeleton: tuple[tuple[int, int], ...] | None = None
@@ -90,6 +93,13 @@ class Style:
             object.__setattr__(self, "timing", "console")
         elif self.timing is not False and self.timing not in ("console",):
             raise ValueError("timing must be False, True or console; timings are console logs only")
+        if self.heatmap_radius is not None and (
+            isinstance(self.heatmap_radius, bool)
+            or not isinstance(self.heatmap_radius, (int, float))
+            or not np.isfinite(self.heatmap_radius)
+            or self.heatmap_radius <= 0
+        ):
+            raise ValueError("heatmap_radius must be a finite positive pixel radius or None")
         if self.summary_title is not None and (
             not isinstance(self.summary_title, str) or not self.summary_title.strip()
         ):
@@ -133,6 +143,7 @@ class Style:
             "pose",
             "trails",
             "summary",
+            "heatmap_contours",
         ):
             if not isinstance(getattr(self, name), bool):
                 raise ValueError(f"{name} must be a boolean")
@@ -176,6 +187,7 @@ class Style:
                 raise ValueError(f"{name} must be a nonnegative integer")
         for name in (
             "mask_opacity",
+            "heatmap_opacity",
             "depth_opacity",
             "summary_opacity",
             "keypoint_confidence",
@@ -248,5 +260,6 @@ def load_font(style: Style, *, size: int | None = None) -> ImageFont.FreeTypeFon
             return font
     raise FileNotFoundError(
         "Arial is required by the Ultralytics annotation brand guide. Set ULTRAVIZ_FONT "
-        "or Style(font_path=...) to your licensed Arial.ttf, or use Style(labels=False)."
+        "or Style(font_path=...) to your licensed Arial.ttf, "
+        "or use Style(labels=False, summary=False)."
     )

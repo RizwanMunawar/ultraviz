@@ -54,7 +54,7 @@ def test_source_is_lazy_and_exposes_raw_results(image):
     events = []
     model = Model(image, events)
     source = Visualizer(
-        "1.mp4", model=model, labels=False, inference={"device": "cpu", "imgsz": 320}
+        "1.mp4", model=model, labels=False, inference={"device": "cpu", "imgsz": 320}, summary=False
     )
     assert not events
     result = next(source)
@@ -79,8 +79,8 @@ def test_source_is_lazy_and_exposes_raw_results(image):
 def test_source_preview_interleaves_inference_and_display(image, monkeypatch, direct):
     events = []
     mock_preview(monkeypatch, events)
-    source = Visualizer("1.mp4", model=Model(image, events), show=True, labels=False)
-    summary = source() if direct else process(source, show=True)
+    source = Visualizer("1.mp4", model=Model(image, events), show=True, labels=False, summary=False)
+    summary = source() if direct else process(source, show=True, summary=False)
     assert summary.frames == 3
     assert events == [
         "predict",
@@ -98,7 +98,12 @@ def test_source_preview_interleaves_inference_and_display(image, monkeypatch, di
 def test_source_callback_extracts_each_result(image):
     extracted = []
     source = Visualizer(
-        "image.jpg", model=Model(image, []), labels=False, on_result=extracted.append, tracking=True
+        "image.jpg",
+        model=Model(image, []),
+        labels=False,
+        on_result=extracted.append,
+        tracking=True,
+        summary=False,
     )
     raw = list(source)
     assert extracted == raw
@@ -106,28 +111,30 @@ def test_source_callback_extracts_each_result(image):
 
 
 def test_process_inherits_source_style(image):
-    source = Visualizer("image.jpg", model=Model(image, []), labels=False, boxes=False)
-    frame = next(process(source))
+    source = Visualizer(
+        "image.jpg", model=Model(image, []), labels=False, boxes=False, summary=False
+    )
+    frame = next(process(source, summary=False))
     assert not frame.any()
     source.close()
 
 
 def test_source_requires_explicit_model():
     with pytest.raises(ValueError, match="model=model"):
-        Visualizer("1.mp4")
+        Visualizer("1.mp4", summary=False)
 
 
 def test_inference_rejects_stream_override(image):
     with pytest.raises(ValueError, match="always streams"):
-        Visualizer("1.mp4", model=Model(image, []), inference={"stream": False})
+        Visualizer("1.mp4", model=Model(image, []), inference={"stream": False}, summary=False)
 
 
 def test_source_early_stop_closes_inference(image, monkeypatch):
     events = []
     mock_preview(monkeypatch, events)
     monkeypatch.setattr("ultraviz.preview.cv2.waitKey", lambda *args: ord("q"))
-    source = Visualizer("1.mp4", model=Model(image, events), labels=False)
-    summary = process(source, show=True)
+    source = Visualizer("1.mp4", model=Model(image, events), labels=False, summary=False)
+    summary = process(source, show=True, summary=False)
     assert summary.frames == 1 and summary.stopped
     assert "infer 1" not in events
     assert events[-1] == "closed"
@@ -136,10 +143,10 @@ def test_source_early_stop_closes_inference(image, monkeypatch):
 def test_annotated_frames_can_be_previewed_and_exported(image, monkeypatch, tmp_path):
     events = []
     mock_preview(monkeypatch, events)
-    summary = process(iter([image, image]), show=True, save=tmp_path / "frames.avi")
+    summary = process(iter([image, image]), show=True, save=tmp_path / "frames.avi", summary=False)
     assert summary.frames == 2
     assert events.count("show") == 2
-    assert np.array_equal(process(image), image)
+    assert np.array_equal(process(image, summary=False), image)
 
 
 def test_preview_does_not_add_full_frame_delay_after_slow_inference(image, monkeypatch):

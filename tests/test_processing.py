@@ -11,8 +11,8 @@ from ultraviz import Instance, Prediction, ProcessSummary, Visualizer, process
 @pytest.fixture(params=["function", "class"])
 def processor(request):
     if request.param == "function":
-        return process
-    return lambda results, **options: Visualizer(options)(results)
+        return lambda results, **options: process(results, summary=False, **options)
+    return lambda results, **options: Visualizer(options, summary=False)(results)
 
 
 def predictions(image, count=3):
@@ -158,4 +158,4 @@ def test_bad_options_fail_before_consuming(processor, image, options, error):
 
 def test_style_overrides(processor, image, style):
     result = next(predictions(image, 1))
-    assert not process(result, style=style, boxes=False).any()
+    assert not process(result, style=style, boxes=False, summary=False).any()
