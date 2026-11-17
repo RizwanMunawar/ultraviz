@@ -1,32 +1,58 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
 
 [project]
-name = "ultiviz"
-version = "0.1.0"
-description = "OpenCV visualization for detection, segmentation, pose, OBB, and tracking results"
+name = "ultraviz"
+version = "0.0.1"
+description = "Ultralytics style visualization for object detection, instance segmentation, pose estimation, OBB, and others."
 readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = [
-    "numpy>=1.23",
-    "opencv-python>=4.8",
-]
+dependencies = ["numpy>=1.23", "opencv-python>=4.8", "Pillow>=10"]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
-    "Topic :: Scientific/Engineering :: Image Processing",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Scientific/Engineering :: Image Processing",
 ]
 
 [project.optional-dependencies]
 ultralytics = ["ultralytics>=8.4"]
-dev = ["build>=1", "twine>=5", "ultralytics>=8.4"]
+dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "build>=1.2"]
+
+[project.urls]
+Repository = "https://github.com/RizwanMunawar/ultraviz"
 
 [project.scripts]
-ultiviz = "ultiviz.cli:main"
+ultraviz = "ultraviz.cli:run_cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["ultiviz*"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/ultraviz"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "D100", "D101", "D102", "D103", "D104", "D105", "D107"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/ultraviz"]
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*", "ultralytics", "ultralytics.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
+# Pillow exposes an optional Qt bridge; the renderer does not use it.
+[[tool.mypy.overrides]]
+module = ["PIL.ImageQt"]
+follow_imports = "skip"

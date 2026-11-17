@@ -1,138 +1,95 @@
-"""Rendering regression checks using real Ultralytics Results, without weights."""
+# ruff: noqa: D103
+"""Public Visualizer configuration, state reuse and result conversion coverage."""
 
-import unittest
-
-import numpy as np
+from argparse import Namespace
 from types import SimpleNamespace
 
-try:
-    from ultralytics.engine.results import Results
-except ModuleNotFoundError as exc:
-    if exc.name != "ultralytics":
-        raise
-    Results = None
+import numpy as np
+import pytest
 
-from ultiviz import Visualizer
+from ultraviz import Instance, Prediction, Visualizer, from_ultralytics
 
 
-@unittest.skipIf(Results is None, "Install ultiviz[ultralytics] for integration tests")
-class VisualizerTests(unittest.TestCase):
-    def setUp(self):
-        self.frame = np.full((96, 160, 3), 100, dtype=np.uint8)
-        self.names = {0: "object", 1: "other"}
-
-    def result(self, **kwargs):
-        return Results(self.frame, "test.jpg", self.names, **kwargs)
-
-    def test_direct_rendering_accepts_real_prediction_types(self):
-        boxes = np.array([[10, 10, 100, 90, .9, 0]], dtype=np.float32)
-        masks = np.zeros((1, 96, 160), dtype=np.float32)
-        masks[:, 20:80, 20:90] = 1
-        points = np.array([[[30, 30, .9], [70, 60, .9]]], dtype=np.float32)
-        obb = np.array([[80, 48, 50, 30, .5, .9, 0]], dtype=np.float32)
-        predictions = [self.result(boxes=boxes), self.result(boxes=boxes, masks=masks),
-                       self.result(boxes=boxes, keypoints=points), self.result(obb=obb),
-                       self.result(probs=np.array([.9, .1], dtype=np.float32))]
-        for result in predictions:
-            with self.subTest(result=result):
-                expected = Visualizer().annotate(result)
-                np.testing.assert_array_equal(Visualizer([result], save=False, show=False), expected)
-                self.assertTrue(np.any(expected != self.frame))
-        np.testing.assert_array_equal(self.frame, 100)
-
-    def test_real_semantic_and_depth_results_render_through_direct_api(self):
-        semantic = np.zeros((96, 160), np.int32)
-        semantic[:, 80:] = 1
-        depth = np.linspace(1, 10, 96 * 160, dtype=np.float32).reshape(96, 160)
-        for result in (self.result(semantic_mask=semantic), self.result(depth=depth)):
-            with self.subTest(kind=type(result)):
-                output = Visualizer([result], save=False, show=False, timing=False)
-                self.assertEqual(output.shape, self.frame.shape)
-                self.assertTrue(np.any(output != self.frame))
-        np.testing.assert_array_equal(self.frame, 100)
-
-    def test_detection_filtering_does_not_modify_input(self):
-        boxes = np.array([[10, 10, 50, 70, 9, .9, 0],
-                          [80, 10, 140, 70, 10, .8, 1]], dtype=np.float32)
-        visualizer = Visualizer(hidden_track_ids={9}, show_labels=False)
-        output = visualizer.annotate(self.frame, self.result(boxes=boxes))
-        np.testing.assert_array_equal(self.frame, 100)
-        np.testing.assert_array_equal(output[:, :60], self.frame[:, :60])
-        self.assertTrue(np.any(output[:, 70:] != self.frame[:, 70:]))
-
-    def test_masks_blend_once_preserve_holes_and_outside(self):
-        masks = np.zeros((2, 96, 160), dtype=np.uint8)
-        masks[0, 10:70, 10:90] = 1
-        masks[1, 30:80, 40:120] = 1
-        masks[:, 45:50, 55:60] = 0
-        visualizer = Visualizer(mask_opacity=.5, boundary_thickness=0)
-        output = visualizer.draw_masks(self.frame.copy(), masks, [(200, 0, 0), (0, 200, 0)])
-        np.testing.assert_array_equal(output[35, 45], [50, 150, 50])
-        np.testing.assert_array_equal(output[20, 20], [150, 50, 50])
-        np.testing.assert_array_equal(output[46, 56], [100, 100, 100])
-        np.testing.assert_array_equal(output[0, 0], [100, 100, 100])
-
-    def test_segmentation_filter_applies_to_masks(self):
-        masks = np.ones((1, 96, 160), dtype=np.float32)
-        boxes = np.array([[10, 10, 50, 70, .9, 0]], dtype=np.float32)
-        visualizer = Visualizer(hidden_classes={"object"})
-        output = visualizer.annotate(self.frame, self.result(boxes=boxes, masks=masks))
-        np.testing.assert_array_equal(output, self.frame)
-
-    def test_semantic_ignore_and_nearest_resize(self):
-        class_map = np.full((48, 80), 255, dtype=np.int32)
-        class_map[:, 40:] = 1
-        visualizer = Visualizer(boundary_thickness=0, mask_opacity=1,
-                                class_colors={1: (0, 200, 0)})
-        output = visualizer.annotate(self.frame, SimpleNamespace(names=self.names, semantic_mask=SimpleNamespace(data=class_map)))
-        np.testing.assert_array_equal(output[:, :80], self.frame[:, :80])
-        np.testing.assert_array_equal(output[40, 120], [0, 200, 0])
-
-    def test_pose_confidence_suppresses_point_and_connected_limb(self):
-        visualizer = Visualizer(skeleton=[(0, 1)], keypoint_confidence=.5)
-        points = np.array([[20, 30, .9], [80, 30, .1]])
-        output = visualizer.draw_pose(self.frame.copy(), points, (0, 255, 0))
-        self.assertTrue(np.any(output[30, 20] != self.frame[30, 20]))
-        np.testing.assert_array_equal(output[30, 50:90], self.frame[30, 50:90])
-
-    def test_obb_without_tracking_id_is_rendered(self):
-        obb = np.array([[80, 48, 50, 30, .5, .9, 0]], dtype=np.float32)
-        output = Visualizer().annotate(self.frame, self.result(obb=obb))
-        self.assertTrue(np.any(output != self.frame))
-
-    def test_pose_results_dispatch(self):
-        boxes = np.array([[10, 10, 100, 90, .9, 0]], dtype=np.float32)
-        points = np.array([[[30, 30, .9], [70, 60, .9]]], dtype=np.float32)
-        visualizer = Visualizer(show_boxes=False, show_labels=False, skeleton=[(0, 1)])
-        output = visualizer.annotate(self.frame, self.result(boxes=boxes, keypoints=points))
-        self.assertTrue(np.any(output[30, 30] != self.frame[30, 30]))
-
-    def test_trails_are_bounded_expire_and_reset(self):
-        visualizer = Visualizer(show_trails=True, trail_length=2, trail_max_gap=1)
-        boxes = np.array([[10, 10, 50, 70, 9, .9, 0]], dtype=np.float32)
-        for _ in range(4):
-            visualizer.annotate(self.frame, self.result(boxes=boxes))
-        self.assertEqual(len(visualizer._history[9]), 2)
-        for _ in range(3):
-            visualizer.annotate(self.frame, self.result())
-        self.assertFalse(visualizer._history)
-        visualizer.reset()
-        self.assertEqual(visualizer._frame_index, 0)
-
-    def test_empty_result_and_small_frame_chart(self):
-        visualizer = Visualizer(show_chart=True)
-        for size in (1, 8, 96):
-            frame = np.zeros((size, size, 3), dtype=np.uint8)
-            result = Results(frame, "empty.jpg", self.names)
-            self.assertEqual(visualizer.annotate(frame, result).shape, frame.shape)
-
-    def test_output_protects_weights_after_model_is_loaded(self):
-        visualizer = Visualizer("models/person-hg-yolo26n.pt")
-        # Simulate lazy loading replacing the path with a model object.
-        visualizer.model = object()
-        with self.assertRaisesRegex(ValueError, "Output must differ"):
-            visualizer.run("input.mp4", "models/person-hg-yolo26n.pt", show_window=False)
+@pytest.mark.parametrize(
+    "args", [{"line_width": 4, "labels": False}, Namespace(line_width=4, labels=False)]
+)
+def test_dictionary_and_namespace_are_not_modified(args, image):
+    before = vars(args).copy() if isinstance(args, Namespace) else args.copy()
+    visualizer = Visualizer(args, line_width=3)
+    assert visualizer.style.line_width == 3
+    assert visualizer.style.labels is False
+    assert (vars(args) if isinstance(args, Namespace) else args) == before
+    assert visualizer(Prediction(image)).shape == image.shape
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_reuses_cached_font_between_calls(image, arial):
+    result = Prediction(image, (Instance(0, name="person", box=(20, 30, 80, 80)),))
+    visualizer = Visualizer(font_size=18)
+    visualizer(result)
+    font = visualizer._annotator._font
+    visualizer(result)
+    assert visualizer._annotator._font is font
+
+
+@pytest.mark.parametrize(
+    "tracked,obb", [(False, False), (True, False), (False, True), (True, True)]
+)
+def test_one_cpu_transfer_for_box_metadata(image, tracked, obb):
+    transfers = []
+    row = [50.0, 50.0, 40.0, 20.0, 0.5] if obb else [20.0, 20.0, 80.0, 80.0]
+    if tracked:
+        row.append(42.0)
+    row.extend([0.9, 0.0])
+
+    class Tensor:
+        """Tensor double that counts transfers without requiring a GPU."""
+
+        def detach(self):
+            """Return detached metadata."""
+            return self
+
+        def cpu(self):
+            """Record one device transfer."""
+            transfers.append("cpu")
+            return self
+
+        def numpy(self):
+            """Return the box metadata as a NumPy batch."""
+            return np.array([row])
+
+    box_data = SimpleNamespace(data=Tensor())
+    if obb:
+        box_data.xyxyxyxy = np.array([[[20.0, 20.0], [80.0, 20.0], [80.0, 80.0], [20.0, 80.0]]])
+    result = SimpleNamespace(
+        orig_img=image, names={0: "person"}, **{"obb" if obb else "boxes": box_data}
+    )
+    instance = from_ultralytics(result).instances[0]
+    assert transfers == ["cpu"]
+    assert instance.track_id == (42 if tracked else None)
+    assert instance.confidence == 0.9
+    assert instance.class_id == 0
+
+
+def test_disabled_layers_skip_tensor_conversion_for_render_and_export(image, tmp_path):
+    class UnavailableTensor:
+        """Tensor double that fails if a disabled layer is copied to CPU."""
+
+        def cpu(self):
+            """Reject unexpected transfers for disabled annotation layers."""
+            raise AssertionError("Disabled layers must not transfer data")
+
+    result = SimpleNamespace(
+        orig_img=image,
+        names={0: "person"},
+        path="input.jpg",
+        boxes=SimpleNamespace(data=np.array([[20.0, 20.0, 80.0, 80.0, 0.9, 0.0]])),
+        masks=SimpleNamespace(data=UnavailableTensor()),
+        keypoints=SimpleNamespace(data=UnavailableTensor()),
+        semantic_mask=SimpleNamespace(data=UnavailableTensor()),
+    )
+    options = {"masks": False, "pose": False, "labels": False}
+    assert Visualizer(options)(result).any()
+    summary = Visualizer(options, save=tmp_path / "frame.png")(result)
+    assert summary.frames == 1
+    summary = Visualizer(options, save=tmp_path / "video.avi")([result])
+    assert summary.frames == 1
