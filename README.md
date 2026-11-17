@@ -105,7 +105,7 @@ for display or export, without running inference or drawing annotations again.
 
 ## Install
 
-Requires Python 3.10 or newer:
+Requires Python 3.10 or newer. Install from this repository locally:
 
 ```bash
 pip install -e '.[ultralytics]'
@@ -141,7 +141,7 @@ print(summary.frames, summary.output, summary.stopped)
 | `fps` | `30` | Video export and preview frame rate |
 | `overwrite` | `False` | Allow replacing an existing output |
 | `line_width` | `None` | Automatic width based on image and object size; an integer overrides it |
-| `font_size` | `None` | Automatic Arial size based on image and box dimensions; an integer overrides it |
+| `font_size` | `None` | Automatic Arial size based on image dimensions; an integer overrides it |
 | `corner_radius` | `8` | Rounded regular/rotated box corners, clamped for tiny boxes |
 | `label_radius` | `6` | Rounded label background corners |
 | `label_padding` | `6` | Pixels of space on each side of label text |
@@ -175,7 +175,8 @@ Automatic sizing uses `scale = min(height, width) / 1080`. The default outline
 is `max(1, round(4 * scale))` pixels and Arial text is
 `max(10, round(30 * scale))` pixels. Using the shorter side gives the same
 sizes for portrait and landscape frames. Large images continue scaling
-without a 4K cap; small objects can receive thinner outlines and smaller labels.
+without a 4K cap. Small objects can receive thinner outlines, while all labels
+keep the same image based font size.
 Explicit `line_width` and `font_size` values remain fixed pixel overrides.
 
 | Frame size (landscape or portrait) | Outline | Arial size |
@@ -490,9 +491,10 @@ Annotation labels use **Arial**, as specified in the bounding boxes section.
 in standard macOS, Windows and Linux locations. Set `font_path` or the
 `ULTRAVIZ_FONT` environment variable to your licensed Arial file when needed.
 The font family is verified, so a renamed substitute cannot bypass the check.
-Arial is not redistributed. The automatic size is 2.5 percent of the shorter
-image dimension, clamped to 10 through 64 pixels, with a smaller size for
-small boxes. Outline widths and keypoint radii also scale automatically.
+Arial is not redistributed. Automatic text size is 30 pixels at a 1080 pixel
+short edge, scaling with image resolution with a 10 pixel minimum and no upper
+cap. Object size does not shrink labels. Outline widths and keypoint radii also
+scale automatically.
 Explicit `font_size`, `line_width` and `keypoint_radius` values take precedence.
 Box outlines and label backgrounds are rounded by default as requested;
 `corner_radius=0` or `label_radius=0` restores square geometry. Missing Arial raises a setup error when labels
@@ -654,39 +656,3 @@ Modules have descriptive responsibilities: `visualizer.py`, `annotation.py`,
 ## License
 
 [AGPL-3.0-only](LICENSE). Ultralytics and Arial retain their licenses and trademarks.
-
-
-## Publishing releases
-
-Merging a PR into `main` runs the Release workflow. It first runs the same lint,
-type, build and full operating system/Python test matrix used for PR checks.
-After success, it verifies that `pyproject.toml` and `ultraviz.__version__` agree,
-builds a wheel and source archive, checks distribution metadata with Twine, and
-publishes a new version to PyPI using Trusted Publishing. Opening or updating
-a PR does not publish a package. The initial version is `0.0.1`.
-
-One time setup in the maintainer's PyPI account is required before merging:
-add a [pending Trusted Publisher](https://pypi.org/manage/account/publishing/)
-with these values (or add a publisher in the existing project's settings):
-
-| Field | Value |
-| --- | --- |
-| PyPI project | `ultraviz` |
-| GitHub owner | `RizwanMunawar` |
-| Repository | `ultraviz` |
-| Workflow filename | `release.yml` |
-| Environment | `pypi` |
-
-No PyPI token is stored in the repository. See the
-[PyPI Trusted Publishing documentation](https://docs.pypi.org/trusted-publishers/using-a-publisher/).
-The workflow uses a GitHub environment named `pypi`, created automatically on
-first use if needed. Any deployment rules configured on that environment still
-apply. The name `ultraviz` must be available on PyPI or owned by the maintainer.
-
-For later releases, update both version declarations in the same PR. Commits
-with an already published version skip uploading. PyPI releases are immutable;
-package changes require a new version. A failed publishing run can be retried
-through Actions by rerunning failed jobs, or by manually running Release on
-`main`. Manual runs on other branches cannot publish. Distributions are kept as
-workflow artifacts for seven days. This PR configures publishing; it does not
-merge itself or upload the package before merge.

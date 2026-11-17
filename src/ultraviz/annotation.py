@@ -229,7 +229,7 @@ class Annotator:
                         text,
                         anchor,
                         rgb,
-                        self.style.resolved_font_size(image.shape[:2], box_size),
+                        self.style.resolved_font_size(image.shape[:2]),
                         item.corners is not None,
                     )
                 )

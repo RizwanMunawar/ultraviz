@@ -83,10 +83,9 @@ def test_default_font_and_line_width_consider_image_and_box_sizes():
     assert style.resolved_line_width((1080, 1920)) == 4
     assert style.resolved_line_width((2160, 3840)) == 8
     assert style.resolved_line_width((2160, 3840), (20, 12)) == 1
-    assert style.resolved_font_size((1080, 1920), (20, 12)) == 10
-    assert style.resolved_font_size((1080, 1920), (500, 300)) == 30
+    assert style.resolved_font_size((1080, 1920)) == 30
     assert Style(line_width=4, font_size=24).resolved_line_width((96, 128), (20, 12)) == 4
-    assert Style(font_size=24).resolved_font_size((96, 128), (20, 12)) == 24
+    assert Style(font_size=24).resolved_font_size((96, 128)) == 24
 
 
 def test_trails_keep_at_most_ten_actual_frames(image):

@@ -139,4 +139,32 @@ def test_fixed_overrides_and_tiny_object_limits_on_large_images():
         assert fixed.resolved_line_width(shape) == 1
         assert fixed.resolved_font_size(shape) == 20
         assert automatic.resolved_line_width(shape, (12, 20)) == 1
-        assert automatic.resolved_font_size(shape, (12, 20)) == 10
+
+
+@pytest.mark.parametrize("shape", [(1080, 1920), (1920, 1080)])
+def test_small_and_large_object_labels_keep_default_thirty_pixel_font(shape, arial, monkeypatch):
+    from PIL import ImageFont
+
+    font_sizes = []
+    original = ImageFont.FreeTypeFont.getbbox
+
+    def record(font, text, *args, **kwargs):
+        font_sizes.append(font.size)
+        return original(font, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageFont.FreeTypeFont, "getbbox", record)
+    image = np.zeros((*shape, 3), np.uint8)
+    result = Prediction(
+        image,
+        (
+            Instance(0, name="small", box=(100, 100, 112, 120)),
+            Instance(1, name="medium", box=(200, 200, 250, 260)),
+            Instance(2, name="large", box=(400, 300, 700, 600)),
+        ),
+    )
+    visualizer = Visualizer(show_conf=False)
+    frame = visualizer.annotate(result)
+    assert font_sizes and set(font_sizes) == {30}
+    assert visualizer._annotator._font.getname()[0] == "Arial"
+    assert frame.any()
+    assert not image.any()

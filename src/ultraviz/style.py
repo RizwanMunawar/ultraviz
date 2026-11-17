@@ -198,24 +198,15 @@ class Style:
                 raise ValueError("skeleton edges must contain two nonnegative integer indices")
             object.__setattr__(self, "skeleton", edges)
 
-    def resolved_font_size(
-        self,
-        shape: tuple[int, int],
-        box_size: tuple[float, float] | None = None,
-    ) -> int:
-        """Scale 30 px Arial at a 1080 px short edge, retaining readable small labels.
+    def resolved_font_size(self, shape: tuple[int, int]) -> int:
+        """Scale 30 px Arial at a 1080 px short edge, independent of object size.
 
         Portrait and landscape frames use the same short edge scale. Large
         images keep scaling beyond 4K; explicit font_size remains a fixed size.
         """
         if self.font_size is not None:
             return self.font_size
-        size = max(10, round(30 * min(shape) / 1080))
-        if box_size is not None:
-            limit = max(10, round(min(box_size[0] * 0.3, box_size[1] * 0.5)))
-            if limit < size:
-                size = max(10, limit // 2 * 2)
-        return size
+        return max(10, round(30 * min(shape) / 1080))
 
     def resolved_line_width(
         self,
