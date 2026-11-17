@@ -1,671 +1,275 @@
 # Ultraviz
 
-Visualize Ultralytics YOLO26 predictions for detection, instance segmentation,
-pose estimation, oriented bounding boxes, semantic segmentation and tracking.
-Classification and depth maps use the same annotation pipeline.
+Visualize detection, tracking, instance segmentation, pose, oriented boxes,
+classification, semantic segmentation and depth results with Ultralytics colors
+and Arial annotations. Images and videos use the same API.
 
-## Source inference and live display
+## Install locally
 
-```python
-from ultralytics import YOLO
-from ultraviz import Visualizer
-
-visualizer = Visualizer(
-    "1.mp4",
-    model=YOLO("Newones/models/yolo26n-visdrone.pt"),
-    demo="detect",
-    show=True,
-    show_conf=False,
-)
-summary = visualizer()
-```
-
-Passing `model=YOLO(...)` directly is supported. The loaded object is reused
-for the full stream, with no second model load. This workflow also accepts an image path. The model must be supplied explicitly;
-Ultraviz does not inspect a separate `model` variable in the caller's scope.
-A weights path can be passed as `model="path/to/weights.pt"` instead of a loaded
-YOLO object. Existing weights are read without modification.
-
-Creating the Visualizer runs no inference. Predictions are requested one at a
-time when the stream is consumed. `process(..., show=True)` displays each frame
-before asking for the next prediction. Source mode defaults to `stream=True`,
-`batch=1`, `stream_buffer=False` and `verbose=False`. No video file frame skipping is enabled by default. Changing batch size or inference settings remains explicit.
-
-You can also configure display/export on the instance and run it directly:
-
-```python
-visualizer = Visualizer(
-    "1.mp4",
-    model=model,
-    show=True,
-    save="output/annotated.mp4",
-    fps=30,
-    mask_opacity=0.5,
-    corner_radius=8,
-    label_radius=6,
-)
-summary = visualizer()
-```
-
-## Existing YOLO results
-
-```python
-from ultralytics import YOLO
-from ultraviz import Visualizer
-
-model = YOLO("yolo26n.pt")
-results = model("path/to/video.mp4", stream=True)
-args = {"show": True, "line_width": 2}
-visualizer = Visualizer(args)
-summary = visualizer(results)
-```
-
-Use `stream=True` for live display. Calling `model(video)` without streaming
-finishes inference for the entire video before returning its result list;
-Ultraviz cannot display predictions before the model returns them.
-
-Configuration accepts a dictionary, `argparse.Namespace`, `Style` object or
-keywords. Keywords override dictionary/namespace values without modifying the
-input. There is one public Visualizer class in `visualizer.py`.
-
-## Extract predictions and frames
-
-Source instances are single pass iterators of raw Ultralytics Results:
-
-```python
-results = Visualizer("1.mp4", model=model)
-for result in results:
-    boxes = result.boxes
-    masks = result.masks
-    keypoints = result.keypoints
-    obb = result.obb
-```
-
-To inspect predictions while displaying, pass `on_result=your_callback` to the
-source constructor. The callback receives every raw Results object immediately
-after inference. `results.last_result` exposes the most recent raw prediction
-without storing the whole video. Use `contextlib.closing(results)` when breaking
-out of raw iteration early. A consumed or closed source does not restart itself;
-create a new source instance to run inference again with the same loaded model.
-
-To extract annotated frames instead:
-
-```python
-results = Visualizer("1.mp4", model=model)
-for frame in process(results):
-    # Use each annotated BGR array here.
-    pass
-```
-
-The source's style is inherited by `process`, and explicit style options can
-override it. `show` and `save` on `process` control that operation; the source's
-show/save settings apply when you call `results()` directly.
-Already annotated BGR arrays or frame iterators can also be passed to
-`process(frames, summary=False, show=True)` for display without running inference
-or replacing an existing task summary with raw frame dimensions.
-
-## Install
-
-Requires Python 3.10 or newer. Install from this repository locally:
+Requires Python 3.10 or newer. From the repository directory:
 
 ```bash
 pip install -e '.[ultralytics]'
 ```
 
-For rendering without inference, use `pip install -e .`; the base dependencies
-are NumPy, OpenCV and Pillow. Ultralytics, PyTorch, model loading and weight
-files remain optional. This independent library does not imply Ultralytics
-endorsement. The distribution, import and console command are named `ultraviz`.
+Use `pip install -e .` when supplying predictions from another backend. The base
+package requires NumPy, OpenCV and Pillow. Ultraviz does not include model weights.
 
-## Options
-
-```python
-visualizer = Visualizer(
-    show=False,
-    save="output/annotated.mp4",
-    fps=30,
-    line_width=3,
-    font_size=None,  # Automatic image based label sizing.
-    mask_opacity=0.5,
-    min_confidence=0.3,
-    classes=frozenset({0, 2}),
-    trails=True,
-)
-summary = visualizer(results)
-print(summary.frames, summary.output, summary.stopped)
-```
-
-| Option | Default | Behavior |
-| --- | --- | --- |
-| `show` | `False` | Preview results in a graphical desktop window |
-| `save` | `None` | Image path for one result; MP4/AVI path for video; directory for PNG frames |
-| `fps` | `30` | Video export and preview frame rate |
-| `overwrite` | `False` | Allow replacing an existing output |
-| `line_width` | `None` | Automatic width based on image and object size; an integer overrides it |
-| `font_size` | `None` | Automatic Arial size based on image dimensions; an integer overrides it |
-| `corner_radius` | `8` | Rounded regular/rotated box corners, clamped for tiny boxes |
-| `label_radius` | `6` | Rounded label background corners |
-| `label_padding` | `6` | Pixels of space on each side of label text |
-| `label_margin` | `0` | Labels touch boxes by default; a positive value adds a gap |
-| `font_path` | Automatic | Location of a licensed Arial font |
-| `mask_opacity` | `0.45` | Instance and semantic overlay opacity |
-| `heatmap_opacity` | `0.72` | Maximum density overlay opacity |
-| `heatmap_radius` | Automatic | Gaussian spread in pixels, following 4.5% of the short edge by default |
-| `heatmap_contours` | `True` | Subtle contour accents at three relative activity levels |
-| `boxes`, `labels`, `masks`, `pose`, `trails` | `True` | Enable or disable annotation layers |
-| `show_conf` | `True` | Print confidence scores in untracked and classification labels |
-| `text_label_color` | `None` | Automatic contrast, or an explicit RGB tuple such as `(255, 255, 255)` |
-| `timing` | `False` | `True` or `"console"` logs per frame durations; never drawn on frames |
-| `depth_opacity` | `0.45` | Blend the yellow to pink depth map with the original scene |
-| `summary` | `True` | Draw the task summary in the top right; False hides it |
-| `summary_title` | Automatic | Override the task heading |
-| `summary_items` | `None` | Mapping or callback adding/overriding metric cards |
-| `summary_width` | Automatic | Panel width in pixels, clamped to the image |
-| `summary_columns` | `2` | Metric columns, from 1 through 3 |
-| `summary_margin` | `16` | Inset from the top and right frame edges |
-| `summary_opacity` | `0.92` | Dark blue panel background opacity; cards remain opaque |
-| `demo` | `None` | Automatic mode, or a model task, count or heatmap |
-| `track_ids` | `True` | Show only numeric IDs on tracked instances; False hides their labels |
-| `min_confidence` | `0.0` | Filter instances by confidence |
-| `classes` | `None` | Restrict instance and semantic class IDs |
-| `trail_length` | `10` | Maximum positions and frame age; allowed range is 1 through 10 |
-| `trail_max_gap` | `10` | Frames before a missing track record expires |
-| `keypoint_confidence` | `0.25` | Threshold for keypoint visibility |
-| `keypoint_radius` | `None` | Follow the resolved outline width; an integer overrides it |
-| `skeleton` | Automatic | COCO edges for 17 points; custom zero based edge pairs otherwise |
-| `ignored_semantic_ids` | `(255, -1)` | Semantic IDs left uncolored |
-
-Automatic sizing uses `scale = min(height, width) / 1080`. The default outline
-is `max(1, round(4 * scale))` pixels and Arial text is
-`max(10, round(30 * scale))` pixels. Using the shorter side gives the same
-sizes for portrait and landscape frames. Large images continue scaling
-without a 4K cap. Small objects can receive thinner outlines, while all labels
-keep the same image based font size.
-Explicit `line_width` and `font_size` values remain fixed pixel overrides.
-
-| Frame size (landscape or portrait) | Outline | Arial size |
-| --- | --- | --- |
-| 1280 × 720 / 720 × 1280 | 3 px | 20 px |
-| 1920 × 1080 / 1080 × 1920 | 4 px | 30 px |
-| 2560 × 1440 / 1440 × 2560 | 5 px | 40 px |
-| 3840 × 2160 / 2160 × 3840 | 8 px | 60 px |
-| 7680 × 4320 / 4320 × 7680 | 16 px | 120 px |
-
-These sizes use the image's pixel resolution, including for exports intended
-for print. Print DPI metadata does not change the rendered pixel dimensions.
-
-Unknown options raise `TypeError`. A `Style` object can also be passed as
-`args` or `style=...`; direct style options override its fields.
-
-With `show` or `save`, the call processes the complete input and returns a
-`ProcessSummary` without retaining video frames. Q/Escape stops the preview;
-any key closes the final frame. Early stopping saves frames processed so far.
-The preview requires an OpenCV GUI and graphical desktop. Exported video has
-no audio. MP4 uses `mp4v`; AVI uses `MJPG`; video dimensions must be constant
-and even. FPS defaults to 30, so supply your source FPS when exporting.
-
-Image suffixes require exactly one result. A directory without a suffix saves
-numbered `frame_000001.png` images. Output directories are created as needed.
-Existing files are protected unless `overwrite=True`; known result source
-paths remain protected. Video output is published only after successful
-processing. A directory export retains completed images if a later frame fails.
-Publishing without overwrite requires a filesystem supporting hard links.
-
-## Flat style arguments and frame timing
-
-No Style object is needed. Pass style fields directly to Visualizer or process:
+## Quick start
 
 ```python
 from ultralytics import YOLO
 from ultraviz import Visualizer
 
 visualizer = Visualizer(
-    "1.mp4",
-    model=YOLO("Newones/models/yolo26n-visdrone.pt"),
-    font_size=36,
-    label_padding=12,
+    "input.mp4",  # An image path, video path, URL or camera index.
+    model=YOLO("yolo26n.pt"),
+    demo="detect",
+    summary_title="Traffic overview",
+    summary_subtitle="Live vehicle detections",
     show_conf=False,
-    text_label_color=(255, 255, 255),  # RGB, not OpenCV BGR.
-    timing=True,
-    show=True,
-)
-summary = visualizer()
-```
-
-`timing=True` or `timing="console"` prints a summary immediately after each
-frame in console logs only. Timings are never drawn on the frame or saved
-into the video. Timing remains off by default.
-
-```text
-Frame 1 | inference: 0.031000 s | visualization: 0.006000 s | total: 0.037000 s
-```
-
-The numbers above are an illustrative example. Inference uses Ultralytics'
-reported per image inference duration, converted from milliseconds to seconds.
-Visualization measures result conversion, copying and annotation. Total is their
-sum; it excludes decoding, model preprocessing/postprocessing, preview waits,
-encoding, logging and callbacks. It is not complete
-pipeline wall time. Missing inference metadata displays `n/a`, including total,
-rather than a fabricated zero. Raw BGR frames have no inference metadata.
-[Ultralytics Results speed metadata](https://docs.ultralytics.com/modes/predict/#working-with-results).
-
-`visualizer.last_timing` exposes the latest immutable FrameTiming record with
-`inference_seconds`, `visualization_seconds` and `total_seconds`. Optional
-`on_timing=your_callback` receives a record for every annotated frame, even with
-console logging disabled. No record history is retained internally. Frame
-numbers count annotations across the instance lifetime; resetting annotation
-history does not reset those numbers. Native Prediction inputs can supply
-`inference_seconds=...` when using another model backend. Console timing does
-not require Arial.
-
-`text_label_color=None` preserves automatic white/dark blue contrast. An RGB
-override applies consistently to object labels and count captions. Summary cards retain automatic contrast.
-Class colors remain in the Ultralytics palette. Style objects are still accepted
-for reuse, but every field can be supplied directly and flat options take
-precedence over fields in a supplied Style.
-
-## Dynamic task summary
-
-The rounded summary panel is visible by default for every task and raw frame.
-Use `summary=False` to hide it. All settings are direct
-Visualizer arguments. The panel uses the Ultralytics dark blue background,
-neon yellow, mint, bright blue and pink cards, rounded corners, and Arial.
-It scales with the frame and stays in the top right. Long titles and values
-are shortened to fit; complete values remain available in `last_summary`.
-
-```python
-visualizer = Visualizer(
-    "1.mp4",
-    model=YOLO("Newones/models/yolo26n-visdrone.pt"),
-    demo="count",  # Also works with heatmap, segment, pose, obb, track, etc.
-    summary=True,
-    summary_title="Vehicles summary",
-    summary_items={"Shift": "Morning"},
-    summary_columns=2,
-    depth_opacity=0.4,
-    timing=True,  # Console only.
     show=True,
 )
 visualizer()
-print(visualizer.last_summary.items)
 ```
 
-Default cards update on every frame using filtered predictions:
+Pass visualization arguments directly to `Visualizer`. The model loads once;
+source predictions stream one frame at a time. Preview requires a graphical
+desktop. Press Q or Escape to stop; any key closes the final frame.
 
-| Task | Default metrics |
-| --- | --- |
-| Raw BGR frame | Image width and height |
-| Detect / count | Objects in frame, visible classes, tracks when available |
-| Tracking | Objects in frame, classes, visible tracks and IDs |
-| Heatmap | Objects in frame, accumulated center samples since sequence reset |
-| Segment | Instances, masks, union mask coverage |
-| Pose | Poses, visible keypoints using the configured threshold |
-| OBB | Oriented boxes, classes |
-| Semantic | Classes and pixel coverage after ignored IDs and class filters |
-| Classify | Top class and confidence, respecting `show_conf=False` |
-| Depth | Finite pixel coverage and raw minimum/maximum values |
+To visualize existing results:
 
-Count means current visible objects. Heatmap samples include repeated observations
-across frames. Neither metric claims unique lifetime objects or line crossings.
-Depth values have the units supplied by your model; the panel does not assume meters.
+```python
+model = YOLO("yolo26n.pt")
+results = model("input.mp4", stream=True)
+visualizer = Visualizer(
+    summary_title="Scene overview",
+    summary_subtitle="Camera 01",
+    show=True,
+)
+visualizer(results)
+```
 
-Use a callback for live custom metrics. It receives an immutable `FrameSummary`
-with `task`, sequence `frame`, default `items`, `class_counts`, and current
-`track_ids`. Return a mapping to add cards or override default names:
+Use `stream=True` for videos so frames can display as inference proceeds.
+An individual result returns one annotated BGR image; a list returns a list;
+an iterator returns lazy annotated frames. With `show` or `save`, the call
+consumes results and returns `ProcessSummary(frames, output, stopped)`.
+
+## Tasks and demos
+
+| `demo` | Visualization | Default summary |
+| --- | --- | --- |
+| `detect` | Rounded boxes and labels | Objects and classes |
+| `track` | Numeric IDs and trails | Objects, classes and visible tracks |
+| `segment` | Instance masks and boxes | Instances, masks and union coverage |
+| `pose` | Keypoints and skeleton | Poses and visible keypoints |
+| `obb` | Rounded oriented boxes | Oriented boxes and classes |
+| `classify` | Classification labels | Top class and optional confidence |
+| `semantic` | Class map overlay | Classes and valid pixel coverage |
+| `depth` | Transparent yellow to pink overlay | Valid pixels and raw value range |
+| `count` | Current visible object count | Objects, classes and visible tracks |
+| `heatmap` | Smooth accumulated density overlay | Objects, samples and vertical activity legend |
+
+Omit `demo` to render the result's available fields automatically. Inference task
+selection requires compatible weights. Count and heatmap work with detect,
+segment, pose or OBB weights. `task="segment", tracking=True` enables tracked
+segmentation; `demo="track"` enables tracking on a compatible checkpoint.
+
+Counts describe objects in the current filtered frame. Heatmap samples include
+repeated observations across frames. Neither means unique lifetime objects or
+line crossings. A new source, frame size or `visualizer.reset()` clears history.
+
+## Summary panel
+
+The rounded panel appears in the top right by default. Title and subtitle are
+optional strings passed directly to `Visualizer`:
 
 ```python
 visualizer = Visualizer(
-    summary=True,
+    summary_title="Production overview",
+    summary_subtitle="Ampoule counting",
+    summary_items={"Line": "A", "Status": "Running"},
+)
+result = model("image.jpg")[0]
+frame = visualizer.annotate(result)
+```
+
+Use `summary=False` to hide the panel. The title defaults to the task name;
+the subtitle is omitted when `None`. Text is shortened to fit the panel, while
+full metric values remain accessible through `visualizer.last_summary.items`.
+
+Custom metrics can also update per frame:
+
+```python
+visualizer = Visualizer(
+    summary_title="Vehicles",
+    summary_subtitle="North entrance",
     summary_items=lambda state: {"Cars": state.class_counts.get("car", 0)},
 )
-frame = visualizer.annotate(results[0])
 ```
 
-Static mappings are copied at construction. Callbacks run once per annotated
-prediction frame, including empty results, and can read your own application
-metrics such as cycle status. Raw BGR frames show image dimensions and custom
-cards, since they have no prediction metadata. Summary calculations and font loading are skipped while
-`summary=False`. Processing times remain in console logs, outside this panel.
+The callback receives `FrameSummary` with `task`, sequence `frame`, default
+`items`, `class_counts` and current `track_ids`. Its returned mapping adds or
+overrides cards. Static mappings are copied during construction. Raw BGR frames
+show image dimensions and custom cards, since they have no predictions.
 
-## Tracking labels and spacing
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `summary` | `True` | Show the panel |
+| `summary_title` | `None` | Custom title; otherwise the task name |
+| `summary_subtitle` | `None` | Optional second line below the title |
+| `summary_items` | `None` | Metric mapping or callback |
+| `summary_width` | Automatic | Panel width in pixels, clamped to the frame |
+| `summary_columns` | `2` | Maximum card columns, from 1 through 3 |
+| `summary_margin` | `16` | Inset from the top and right edges |
+| `summary_opacity` | `0.92` | Dark blue background opacity |
+
+## Heatmaps and depth
 
 ```python
 visualizer = Visualizer(
-    "1.mp4",
-    model=model,
-    tracking=True,
-    show=True,
-    label_padding=8,
-    label_margin=0,
-)
-summary = visualizer()
-```
-
-An instance with a track ID displays only that numeric ID, for example `42`.
-No class name, confidence or prefix is added. This also applies to tracked
-segmentation, pose and OBB results. `track_ids=False` hides tracked labels.
-Untracked detections keep their normal class/confidence labels.
-
-`label_padding` controls space inside the rounded background around all four
-sides of the text. `label_margin=0` attaches the label background to its box.
-Positive values deliberately add separation and an image edge inset. A label prefers the area above its
-anchor and falls below if needed. Tiny frames clamp the spacing to fit.
-Classification rows use the same padding and margin settings. Every task's
-text passes through this shared label renderer.
-
-## Returned frames
-
-Without `show` or `save`, `visualizer(results)` returns annotated BGR arrays:
-
-```python
-visualizer = Visualizer()
-frames = visualizer(model("image.jpg"))  # A list, even for one image.
-frame = visualizer(model("image.jpg")[0])  # A single image array.
-
-results = model("video.mp4", stream=True)
-for frame in visualizer(results):
-    # Use each annotated frame here.
-    pass
-```
-
-List and tuple inputs return lists. Iterator inputs stay lazy and must be
-consumed. Use `contextlib.closing(visualizer(results))` if stopping early so the
-upstream iterator is closed. Input images are borrowed and remain unchanged;
-returned frames are copies. All images use `uint8` BGR arrays `(H, W, 3)`.
-
-A `Visualizer` belongs to one sequential stream and is not thread safe. Lists
-and iterators start a fresh sequence. Single result calls retain tracking
-history for incremental frame processing. Source or image size changes reset
-history; call `visualizer.reset()` when seeking or switching unrelated videos
-with the same source path. The annotation engine and loaded font are reused.
-`annotate()` and `stream()` offer drawing without preview or export.
-
-## Demo modes and confidence text
-
-Use `demo` to select a workflow. Model task demos require matching weights.
-Count and heatmap use instance predictions from detection, segmentation, pose
-or OBB weights; they are visualization modes, not separate model architectures.
-
-| `demo` | Behavior |
-| --- | --- |
-| Omitted or `None` | Automatically render the model's results |
-| `detect`, `segment`, `pose`, `obb` | Select and validate the corresponding model task |
-| `semantic`, `depth`, `classify` | Select and validate a dense or classification model task |
-| `track` | Enable tracking on compatible weights, showing numeric IDs only |
-| `count` | Display the current visible instance count |
-| `heatmap` | Accumulate detection center density for the current sequence |
-
-```python
-visualizer = Visualizer("1.mp4", model=model, demo="count", show_conf=False, show=True)
-summary = visualizer()
-print(visualizer.count)  # Visible objects in the most recently annotated frame.
-
-visualizer = Visualizer("1.mp4", model=model, demo="heatmap", show=True)
-summary = visualizer()
-```
-
-Counting respects class and confidence filters and reports the current frame,
-not line crossings or unique lifetime identities. Heatmaps use a coarse spatial
-grid and never retain the video frames. `reset()` clears density and trails.
-Heatmap mode uses a smooth, transparent activity field with brand dark blue,
-bright blue, aqua, mint, yellow and pink. Inactive areas stay unchanged. Subtle
-contours and a low to high activity legend make density levels easier to read.
-The radius scales with the image's shorter side, including portrait video.
-
-Heatmap mode hides object boxes, labels, masks, pose and trails by default when
-using direct arguments; the summary remains visible. Enable individual layers
-explicitly, e.g. `boxes=True, labels=True`. A supplied Style keeps its own layer
-settings. All heatmap adjustments are direct Visualizer arguments:
-
-```python
-visualizer = Visualizer(
-    "1.mp4",
+    "input.mp4",
     model=model,
     demo="heatmap",
+    summary_title="Traffic activity",
+    summary_subtitle="Accumulated object observations",
     heatmap_opacity=0.72,
     heatmap_radius=48,
     heatmap_contours=True,
-    summary_title="Traffic activity",
-    summary_items={"Shift": "Morning"},
     show=True,
 )
 visualizer()
 ```
 
-The map displays accumulated detection center observations, normalized to the
-current peak density. It is relative activity, not a calibrated probability or
-a count of unique objects. Heatmap shading is independent of `mask_opacity`.
-Use `heatmap_opacity=0` to hide shading while keeping statistics. Use
-`summary=False` to hide the summary and legend. The CLI accepts
-`--heatmap-opacity`, `--heatmap-radius`, and `--no-heatmap-contours`.
+Heatmaps preserve the scene with transparent density shading. The summary's
+activity scale is **vertical**, with high activity at the top and low activity
+at the bottom. The overlay itself follows the frame in either orientation;
+it is not rotated or stretched to a fixed aspect ratio.
 
-`show_conf=False` hides printed scores; it does not change model predictions or
-filtering. Use `inference={"conf": 0.4}` to set a model threshold. Tracked object
-labels always contain only their numeric ID. The old Visualizer/process keyword
-`confidence` remains an alias for `show_conf`; Style uses `show_conf` directly.
+Density is normalized to the current peak accumulated activity. The automatic
+Gaussian spread follows 4.5% of the frame's shorter side. Heatmap mode hides
+boxes, labels, masks, pose and trails by default when using direct arguments;
+explicit layer arguments or a supplied Style override those defaults.
 
-The default trail keeps at most 10 positions from the last 10 actual frames.
-Set `trail_length=5` for a shorter trail. Values above 10 are rejected, and
-missing detections cannot stretch a trail's time span beyond that window.
-
-## Selecting a task
-
-The default is automatic: the model weights determine inference, and result
-fields determine annotation. You can select and validate the task explicitly:
-
-```python
-visualizer = Visualizer("image.jpg", model="yolo26n-seg.pt", task="segment", show=True)
-summary = visualizer()
-
-visualizer = Visualizer("video.mp4", model=model, task="track", show=True)
-summary = visualizer()
-```
-
-| `task` | Meaning |
-| --- | --- |
-| Omitted or `None` | Infer from the model |
-| `detect` | Object detection |
-| `segment` | Instance segmentation |
-| `pose` | Pose estimation |
-| `obb` | Oriented bounding boxes |
-| `classify` | Classification |
-| `semantic` | Semantic segmentation |
-| `depth` | Depth estimation |
-| `track` | Tracking using the model's compatible task |
-
-Task selection requires matching weights. `task="segment"` cannot convert a
-detection checkpoint into a segmentation model; mismatches raise before
-prediction runs. Tracking supports detect, segment, pose and OBB weights.
-For tracked segmentation use `task="segment", tracking=True`, or use
-`task="track"` with a segmentation checkpoint. Task settings can also be supplied
-in the configuration dictionary or Namespace. Inference model task checks run
-when the lazy source is first consumed. Existing Results objects always render
-according to their actual fields; task selection does not invent missing data.
-
-The console also supports `--demo count`, `--demo heatmap`, `--hide-conf` and
-`--summary-title "Vehicles summary"`, `--no-summary` to hide the default panel,
-and `--timing` for console logs.
-Use `--task segment` or `--task track`; `--track` is retained
-for enabling tracking with an explicitly selected model task.
-
-## Supported tasks
-
-| Task | Required results | Output |
+| Argument | Default | Meaning |
 | --- | --- | --- |
-| Detection | `boxes` | Axis aligned boxes and labels |
-| Instance segmentation | `boxes` and `masks` | Bitmap masks preserving holes, plus boxes |
-| Pose estimation | `boxes` and `keypoints` | Keypoints and skeleton edges |
-| OBB | `obb` | Four rotated corners and labels |
-| Tracking | IDs from `model.track()` | IDs and bounded trails, including segment, pose and OBB tracks |
-| Semantic segmentation | `semantic_mask` or `Prediction(semantic=...)` | Integer class map overlay |
-| Classification | `probs` | Top five class probabilities |
-| Depth | `depth` or `Prediction(depth=...)` | Yellow to pink depth map |
+| `heatmap_opacity` | `0.72` | Maximum density overlay opacity |
+| `heatmap_radius` | Automatic | Gaussian standard deviation in image pixels |
+| `heatmap_contours` | `True` | Subtle relative density contours |
+| `depth_opacity` | `0.45` | Blend depth colors with the original scene |
+| `mask_opacity` | `0.45` | Instance and semantic mask opacity |
+
+Depth is normalized per frame: lower values are yellow, higher values pink.
+These are model values, not RGB brightness. Nonfinite pixels remain unchanged;
+the visualization does not assume metric units. Opacity `0` hides an overlay;
+`1` makes it solid. Depth, heatmap and mask opacity settings are independent.
+
+## Labels and geometry
+
+Automatic sizing uses `scale = min(height, width) / 1080`:
+
+- Outline width: `max(1, round(4 * scale))` pixels, thinner on small boxes.
+- Arial font size: `max(10, round(30 * scale))` pixels, independent of box size.
+
+| Frame size, including portrait equivalents | Outline | Label font |
+| --- | --- | --- |
+| 1280 × 720 | 3 px | 20 px |
+| 1920 × 1080 | 4 px | 30 px |
+| 3840 × 2160 | 8 px | 60 px |
+| 7680 × 4320 | 16 px | 120 px |
+
+Explicit sizes remain fixed pixel overrides. Labels touch box outlines by
+default and retain padding inside the rounded background. Tracking labels show
+only numeric IDs. Trails retain at most ten actual frames.
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `line_width`, `font_size` | `None` | Automatic sizing, or fixed positive pixels |
+| `corner_radius`, `label_radius` | `8`, `6` | Box and label corner radii |
+| `label_padding`, `label_margin` | `6`, `0` | Internal padding and gap from the box |
+| `show_conf`, `track_ids` | `True` | Confidence text and tracked object labels |
+| `text_label_color` | Automatic | Text contrast, or an RGB tuple |
+| `font_path` | Automatic | Licensed Arial font path |
+| `boxes`, `labels`, `masks`, `pose`, `trails` | `True` | Object layers; heatmap defaults differ |
+| `min_confidence`, `classes` | `0.0`, `None` | Rendering filters |
+| `trail_length`, `trail_max_gap` | `10`, `10` | Trail frame limit and missing track expiry |
+| `keypoint_radius` | Automatic | Keypoint size in pixels |
+| `keypoint_confidence` | `0.25` | Keypoint visibility threshold |
+| `skeleton` | Automatic | COCO edges for 17 points; custom index pairs otherwise |
+| `ignored_semantic_ids` | `(255, -1)` | Semantic IDs excluded from overlays |
+
+Colors and annotation typography follow the
+[Ultralytics brand guidelines](https://www.ultralytics.com/brand). Arial must be
+installed or supplied through `font_path` or `ULTRAVIZ_FONT`; it is not bundled.
+Use `labels=False, summary=False` to render without loading a font. All color
+arguments use RGB; input and output image arrays use OpenCV BGR.
+
+## Save, inspect and time results
 
 ```python
-results = model.track("input.mp4", stream=True)
-visualizer = Visualizer(save="output/tracks.mp4", trails=True, fps=30)
-summary = visualizer(results)
-```
-
-Use models supported by your installed Ultralytics version. Ultraviz ships no
-weights and does not run a second inference pass. Custom pose layouts draw
-points unless `skeleton=((0, 1), (1, 2))` is configured. Depth colors are
-normalized per frame. Lower values are yellow and higher values pink; these
-are depth values, not the brightness of the RGB scene. Valid pixels use an
-transparent overlay controlled by `depth_opacity=0.45`, independent of
-`mask_opacity`, so scene details remain visible. Use `depth_opacity=0` to hide
-the overlay or `1` for a solid map. NaN and infinite pixels remain unchanged. The gradient
-is a visualization, not a metric depth scale.
-
-## Ultralytics branding
-
-Source of truth: [Ultralytics brand guidelines](https://www.ultralytics.com/brand),
-reviewed November 17, 2026.
-
-Annotation labels use **Arial**, as specified in the bounding boxes section.
-**Archivo** is the corporate font for editorial material. Arial is discovered
-in standard macOS, Windows and Linux locations. Set `font_path` or the
-`ULTRAVIZ_FONT` environment variable to your licensed Arial file when needed.
-The font family is verified, so a renamed substitute cannot bypass the check.
-Arial is not redistributed. Automatic text size is 30 pixels at a 1080 pixel
-short edge, scaling with image resolution with a 10 pixel minimum and no upper
-cap. Object size does not shrink labels. Outline widths and keypoint radii also
-scale automatically.
-Explicit `font_size`, `line_width` and `keypoint_radius` values take precedence.
-Box outlines and label backgrounds are rounded by default as requested;
-`corner_radius=0` or `label_radius=0` restores square geometry. Missing Arial raises a setup error when labels
-are drawn; `labels=False, summary=False` renders geometry without loading a font.
-
-Class colors use the official twenty entry bounding box palette in its
-published order. Colors repeat after twenty classes and remain stable across
-track IDs. By default, labels choose white or dark blue text by relative luminance for
-contrast. `text_label_color` provides an explicit RGB override. Depth uses exact neon yellow (#E1FF25) at its low end and neon pink
-(#FF64DA) at its high end, with continuous interpolation between them. No logos are
-altered or redistributed.
-
-## Inference performance
-
-Model execution settings belong to Ultralytics. Pass them to `model(...)`
-directly, or use `inference={...}` in source mode:
-
-```python
-model = YOLO("yolo26n.pt")  # Load once and reuse.
-results = model("video.mp4", stream=True, device=0, quantize=16)
-visualizer = Visualizer(save="annotated.mp4", fps=30)
-summary = visualizer(results)
-```
-
-For the source workflow, the equivalent is
-`Visualizer("video.mp4", model=model, inference={"device": 0, "quantize": 16})`.
-
-`device=0` and `quantize=16` are optional settings for a compatible GPU and model
-backend; omit them for other hardware. Current Ultralytics uses `quantize=16`
-for FP16; its older `half` flag is deprecated. Further improvements depend on the
-actual device and accuracy requirements:
-
-- Use `stream=True` for bounded result memory; it does not itself guarantee
-  lower inference latency.
-- Reuse the YOLO model and Visualizer. Font discovery happens once per engine.
-- Benchmark `imgsz`, batch size and smaller models against your accuracy needs.
-- Use FP16 where supported. Consider TensorRT for compatible NVIDIA GPUs,
-  OpenVINO for suitable CPUs, or CoreML for supported Apple deployments.
-- Keep `show=False` for throughput measurements; preview intentionally waits
-  between frames. Measure preprocessing, inference, conversion, annotation and
-  encoding separately after warmup.
-
-The result adapter transfers box metadata to CPU once, instead of separately
-transferring coordinates, classes, confidence and IDs. OBB corner geometry,
-masks and keypoints still require their own transfers. Label contrast colors
-and fonts are cached. Disabled mask and pose layers skip their tensor
-transfers entirely, and fully transparent mask blending is skipped.
-Repeated labels use bounded cached sprites composited into local image regions,
-so labeling no longer converts the complete frame through Pillow.
-
-A local CPU smoke test used the existing VisDrone weights and eight 1920 by 1080
-frames from `1.mp4`, with `imgsz=640` and around 90 detections on the first frame.
-Median annotation time across frames 2 through 8 fell from 49.38 ms before label
-sprite caching to 9.01 ms afterward. Model inference medians were 30.74 ms and
-30.43 ms respectively; this is a rendering improvement, not a measured model
-speedup. The short sample does not predict performance on other devices or
-videos. User weights were not modified. No CUDA or MPS device was available in
-the test environment.
-
-A longer followup with the updated label padding measured 55 frames after five
-warmup frames, averaging 88.9 detections per 1080p frame. Median annotation was
-7.84 ms, its 95th percentile was 9.12 ms, and median model inference was 31.52 ms.
-The measured decode/inference/annotation throughput was 23.3 FPS without preview
-or output encoding. These detection measurements do not establish throughput
-for dense segmentation masks or every production workload. Tests also exercise
-600 sequential track IDs to verify bounded label cache and trail history.
-
-The code audit additionally measured 30 sparse 80 by 120 masks in a 1080p
-frame. Replacing full frame boolean blending with bounded mask regions reduced
-median annotation from 272.18 ms to 22.43 ms. Mask construction dropped from
-10.63 ms to 5.74 ms after removing duplicate copies and scans. This is a
-synthetic sparse mask case; dense/full frame masks have different costs.
-
-Caching rounded rectangle paths reduced median detection annotation from
-7.84 ms to 6.45 ms on the same 55 measured video frames after five warmup frames.
-The new 95th percentile was 7.48 ms; model inference was 30.90 ms and measured
-processing throughput was 24.5 FPS without preview or encoding. These timings
-are local samples, not guarantees across models or devices.
-
-References: [prediction settings](https://docs.ultralytics.com/modes/predict/)
-and [export backends](https://docs.ultralytics.com/modes/export/).
-
-## Other model backends
-
-```python
-import numpy as np
-from ultraviz import Instance, Prediction, Visualizer
-
-image = np.zeros((480, 640, 3), dtype=np.uint8)
-prediction = Prediction(
-    image,
-    instances=(
-        Instance(class_id=0, name="person", confidence=0.92, box=(100, 80, 250, 400), track_id=7),
-    ),
+visualizer = Visualizer(
+    "input.mp4",
+    model=model,
+    save="output/annotated.mp4",
+    fps=30,
+    timing=True,
 )
-frame = Visualizer()(prediction)
+operation = visualizer()
+print(operation.frames, operation.output)
 ```
 
-Optional instance fields are `corners` `(4, 2)`, boolean `mask` `(H, W)` and
-`keypoints` `(K, 2)` or `(K, 3)` with confidence. Coordinates use original image
-pixels. Dense maps must match the image `(H, W)`. Geometry and maps are copied
-on construction. The Ultralytics adapter assumes standard centered letterbox
-masks; custom preprocessing should restore masks before creating `Prediction`.
+`save` accepts one image path, an MP4/AVI video path, or a directory for numbered
+PNG frames. Set the source FPS explicitly for video exports. Output is silent
+video, with constant even frame dimensions. Existing files are protected unless
+`overwrite=True`; source paths remain protected. Output directories are created
+automatically. Video files are published only after successful processing.
 
-## Command line
+`timing=True` logs inference, visualization and their sum in seconds to the
+console. Timings never appear on frames. Inference uses the result's metadata;
+visualization includes conversion and rendering. Total excludes decoding,
+preprocessing, postprocessing, preview waits and encoding. Unknown values show
+`n/a`. Access `last_timing`, or pass `on_timing=callback` for per frame records.
+
+To consume predictions or annotated frames yourself:
+
+```python
+from ultraviz import process
+
+source = Visualizer("input.mp4", model=model)
+for frame in process(source):
+    raw_result = source.last_result
+    # Use frame and raw_result here.
+```
+
+Iterating `source` directly yields raw Results; `on_result=callback` receives
+each prediction during normal processing. Close an iterator when stopping early.
+Sources are single pass. Reuse the loaded model for a new source; one Visualizer
+owns one sequential stream and is not thread safe.
+
+Source inference settings go in `inference={...}`, for example
+`inference={"imgsz": 640, "device": "cpu"}`. Defaults stream one frame at a time
+without buffering. Dictionaries, argparse Namespace and Style configurations
+are also accepted; direct keywords take precedence. Unknown options fail early.
+
+Other backends can supply `Prediction(image, instances=...)` with `Instance`
+objects, or `Prediction(semantic=..., image=...)` and `Prediction(depth=...,
+image=...)`. Masks and dense maps must match the image dimensions. Pose points
+use `(K, 2)` or `(K, 3)` arrays; OBB corners use `(4, 2)` coordinates.
+Input frames are never modified.
+
+## CLI
 
 ```bash
 ultraviz --model yolo26n.pt --source image.jpg --output annotated.png
-ultraviz --model yolo26n-seg.pt --source input.mp4 --output annotated.mp4 --fps 30
+ultraviz --model yolo26n.pt --source input.mp4 --output activity.mp4 --fps 30 \
+  --demo heatmap --summary-title "Traffic activity" \
+  --summary-subtitle "Camera 01" --timing
 ultraviz --help
 ```
 
-The console implementation is `cli.py`. There is no `__main__.py`.
-`process`, `save_image` and `save_video` remain available as convenience
-or lower level functions, sharing the same annotation implementation. The
-recommended user entry point is `Visualizer`.
-
-## Audit cleanup
-
-The CLI now uses the same processing/export implementation as the Python API.
-Source processing reuses its existing annotation engine and font/label caches.
-Video export no longer repeats filesystem checks for an unchanged source on
-every frame, and directory export creates its directory once. Label sprites are
-bounded by both 256 entries and an 8 MiB byte budget.
-
-The redundant `render()` helper was removed; use `Visualizer()(result)` or
-`process(result)`. Unused `Prediction.names` was removed; native instances carry
-`Instance.name`, while raw Ultralytics Results retain their names dictionary.
-No task implementations or requested rendering features were removed.
-
-Additional checks reject invalid boolean settings, unsupported task/model
-combinations, missing class IDs and nonnumeric geometry. Cleanup releases the
-input stream even when preview teardown fails. Depth normalization avoids
-overflow for extreme finite values. Array ownership and rendered mask pixels
-remain covered by regression tests.
+Use `--no-summary` to hide the panel, `--hide-conf` for confidence text,
+`--heatmap-radius` and `--heatmap-opacity` to adjust density, and
+`--no-heatmap-contours` to hide contour accents.
 
 ## Development
 
@@ -678,17 +282,11 @@ pytest
 python -m build
 ```
 
-Docstring linting covers library classes and public methods. Tests have scoped
-`noqa` comments because descriptive test names document their scenarios.
-Tests use synthetic data and real Ultralytics Results without model downloads
-or GUI windows. Arial tests skip when unavailable; integration tests skip when
-Ultralytics or PyTorch is absent. CI covers Python 3.10 through 3.13 on Linux,
-macOS and Windows, with a separate integration job.
-
-Modules have descriptive responsibilities: `visualizer.py`, `annotation.py`,
-`predictions.py`, `adaptor.py`, `branding.py`, `style.py`,
-`processing.py`, `preview.py`, `summary.py`, `timing.py`, `export.py`, `inference.py` and `cli.py`.
+Tests use synthetic predictions and real Ultralytics Results without downloading
+models or opening GUI windows. Arial tests skip when the font is unavailable;
+Ultralytics integration tests skip when the optional backend is absent.
 
 ## License
 
-[AGPL-3.0-only](LICENSE). Ultralytics and Arial retain their licenses and trademarks.
+[AGPL-3.0-only](LICENSE). This independent library does not imply Ultralytics
+endorsement. Ultralytics and Arial retain their own licenses and trademarks.

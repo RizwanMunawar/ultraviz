@@ -150,7 +150,7 @@ class SummaryPanel:
         style: Style,
         font_for_size: Callable[[int], ImageFont.FreeTypeFont],
     ) -> None:
-        """Fit a title, metric cards and track IDs within the available frame area."""
+        """Fit the title, subtitle, metric cards and activity scale within the frame."""
         height, width = image.shape[:2]
         margin = min(style.summary_margin, max(0, (min(height, width) - 1) // 4))
         available_width, available_height = width - 2 * margin, height - 2 * margin
@@ -159,17 +159,29 @@ class SummaryPanel:
             1, min(style.font_size or max(12, round(min(height, width) * 0.019)), panel_width // 16)
         )
         entries = list(summary.items.items())
-        columns = min(style.summary_columns, max(1, len(entries)))
-        rows = (len(entries) + columns - 1) // columns
-        # Reduce the layout on small images rather than drawing outside the frame.
+        has_legend = summary.task == "heatmap"
+        # Fit all rows and the optional subtitle before drawing the panel.
         while True:
             pad = max(2, round(size * 0.8))
             gap = max(2, size // 2)
-            card_height = size * 4
-            footer = (size * 2 if summary.track_ids else 0) + (
-                size * 3 if summary.task == "heatmap" else 0
+            subtitle_size = max(1, round(size * 0.8))
+            header_height = size * 2 + (subtitle_size + gap if style.summary_subtitle else 0)
+            legend_width = max(1, round(size * 2.5)) if has_legend else 0
+            content_width = max(
+                1, panel_width - 2 * pad - (legend_width + gap if has_legend else 0)
             )
-            panel_height = pad * 2 + size * 2 + rows * card_height + max(0, rows - 1) * gap + footer
+            columns = min(
+                style.summary_columns,
+                max(1, len(entries)),
+                max(1, content_width // max(1, size * 6)),
+            )
+            rows = (len(entries) + columns - 1) // columns
+            card_height = size * 4
+            if has_legend:
+                card_height = max(card_height, (size * 6 + rows - 1) // max(1, rows))
+            body_height = rows * card_height + max(0, rows - 1) * gap
+            footer = size * 2 if summary.track_ids else 0
+            panel_height = pad * 2 + header_height + body_height + footer
             if panel_height <= available_height or size == 1:
                 break
             size -= 1
@@ -183,7 +195,17 @@ class SummaryPanel:
         )
         title = style.summary_title or f"{summary.task.capitalize()} summary"
         self._text(draw, (pad, pad), title, font_for_size(size), WHITE, panel_width - 2 * pad)
-        card_width = max(1, (panel_width - 2 * pad - (columns - 1) * gap) // columns)
+        if style.summary_subtitle:
+            self._text(
+                draw,
+                (pad, pad + size + gap),
+                style.summary_subtitle,
+                font_for_size(subtitle_size),
+                (172, 249, 255),
+                panel_width - 2 * pad,
+            )
+        body_y = pad + header_height
+        card_width = max(1, (content_width - (columns - 1) * gap) // columns)
         palette = (
             NEON_YELLOW,
             (118, 255, 214),
@@ -194,7 +216,7 @@ class SummaryPanel:
         )
         for index, (label, value) in enumerate(entries):
             x = pad + (index % columns) * (card_width + gap)
-            y = pad + size * 2 + (index // columns) * (card_height + gap)
+            y = body_y + (index // columns) * (card_height + gap)
             rgb = palette[index % len(palette)]
             draw.rounded_rectangle(
                 (x, y, x + card_width - 1, y + card_height - 1),
@@ -213,38 +235,22 @@ class SummaryPanel:
             )
             self._text(
                 draw,
-                (x + inset, y + size * 2),
+                (x + inset, y + card_height // 2),
                 str(value),
                 font_for_size(size + max(1, size // 2)),
                 text_color(rgb),
                 text_width,
             )
-        if summary.task == "heatmap":
-            legend_y = pad + size * 2 + rows * card_height + max(0, rows - 1) * gap + gap
-            ramp = PILImage.fromarray(heatmap_lut()[:, 0, ::-1][None]).resize(
-                (max(1, panel_width - 2 * pad), max(1, size // 2))
-            )
-            canvas.paste(ramp, (pad, legend_y))
-            self._text(
+        if has_legend:
+            self._legend(
+                canvas,
                 draw,
-                (pad, legend_y + size),
-                "Low activity",
-                font_for_size(max(1, size * 3 // 4)),
-                WHITE,
-                (panel_width - 2 * pad) // 2,
-            )
-            high_font = font_for_size(max(1, size * 3 // 4))
-            high_text = "High activity"
-            self._text(
-                draw,
-                (
-                    max(pad, panel_width - pad - round(high_font.getlength(high_text))),
-                    legend_y + size,
-                ),
-                high_text,
-                high_font,
-                WHITE,
-                (panel_width - 2 * pad) // 2,
+                panel_width - pad - legend_width,
+                body_y,
+                legend_width,
+                body_height,
+                size,
+                font_for_size,
             )
         if summary.track_ids:
             text = "Track IDs: " + ", ".join(map(str, summary.track_ids))
@@ -261,6 +267,31 @@ class SummaryPanel:
         roi = image[y : y + panel_height, x : x + panel_width]
         alpha = rgba[:, :, 3:4].astype(np.float32) / 255
         roi[:] = np.rint(roi * (1 - alpha) + rgba[:, :, 2::-1] * alpha).astype(np.uint8)
+
+    @staticmethod
+    def _legend(
+        canvas: PILImage.Image,
+        draw: ImageDraw.ImageDraw,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        size: int,
+        font_for_size: Callable[[int], ImageFont.FreeTypeFont],
+    ) -> None:
+        """Draw a vertical activity scale with high values above low values."""
+        font_size = max(1, size * 3 // 4)
+        gap = max(1, size // 3)
+        bar_width = max(1, size // 2)
+        bar_height = max(1, height - 2 * (font_size + gap))
+        # Reverse the ramp so the high activity pink endpoint is at the top.
+        levels = np.rint(np.linspace(255, 0, bar_height)).astype(np.uint8)
+        ramp = PILImage.fromarray(heatmap_lut()[levels, :, ::-1]).resize((bar_width, bar_height))
+        canvas.paste(ramp, (x + max(0, (width - bar_width) // 2), y + font_size + gap))
+        font = font_for_size(font_size)
+        for text, text_y in (("High", y), ("Low", y + height - font_size)):
+            text_x = x + max(0, round((width - font.getlength(text)) / 2))
+            SummaryPanel._text(draw, (text_x, text_y), text, font, WHITE, width)
 
     @staticmethod
     def _text(

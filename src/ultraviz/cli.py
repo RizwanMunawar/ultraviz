@@ -28,6 +28,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         help="Show task metrics in the top right (default: enabled)",
     )
     parser.add_argument("--summary-title")
+    parser.add_argument("--summary-subtitle")
     parser.add_argument("--summary-width", type=int)
     parser.add_argument("--summary-columns", type=int, default=2)
     parser.add_argument("--summary-margin", type=int, default=16)
@@ -87,6 +88,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
                 timing=args.timing,
                 summary=args.summary,
                 summary_title=args.summary_title,
+                summary_subtitle=args.summary_subtitle,
                 summary_width=args.summary_width,
                 summary_columns=args.summary_columns,
                 summary_margin=args.summary_margin,

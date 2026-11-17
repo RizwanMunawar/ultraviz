@@ -55,6 +55,7 @@ class Style:
     demo: str | None = None
     summary: bool = True
     summary_title: str | None = None
+    summary_subtitle: str | None = None
     summary_items: Mapping[str, Metric] | Callable[[FrameSummary], Mapping[str, Metric]] | None = (
         None
     )
@@ -100,10 +101,10 @@ class Style:
             or self.heatmap_radius <= 0
         ):
             raise ValueError("heatmap_radius must be a finite positive pixel radius or None")
-        if self.summary_title is not None and (
-            not isinstance(self.summary_title, str) or not self.summary_title.strip()
-        ):
-            raise ValueError("summary_title must be a nonempty string or None")
+        for name in ("summary_title", "summary_subtitle"):
+            text = getattr(self, name)
+            if text is not None and (not isinstance(text, str) or not text.strip()):
+                raise ValueError(f"{name} must be a nonempty string or None")
         if self.summary_items is not None and not callable(self.summary_items):
             object.__setattr__(
                 self, "summary_items", MappingProxyType(validate_items(self.summary_items))

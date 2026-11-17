@@ -196,3 +196,58 @@ def test_heatmap_summary_accumulates_then_resets_with_sequence(image, arial):
     assert visualizer.last_summary.items["Samples"] == 2
     visualizer(Prediction(image, source="two.mp4"))
     assert visualizer.last_summary.items["Samples"] == 0
+
+
+def test_title_and_subtitle_are_direct_visualizer_keywords(arial, monkeypatch):
+    from ultraviz.summary import SummaryPanel
+
+    drawn = []
+    original = SummaryPanel._text
+
+    def capture(draw, position, text, font, rgb, width):
+        drawn.append((text, position))
+        return original(draw, position, text, font, rgb, width)
+
+    monkeypatch.setattr(SummaryPanel, "_text", staticmethod(capture))
+    visualizer = Visualizer(
+        {"summary_title": "Configured title", "summary_subtitle": "Configured subtitle"},
+        summary_title="Production overview",
+        summary_subtitle="Ampoule counting",
+        labels=False,
+    )
+    visualizer(Prediction(np.zeros((480, 800, 3), np.uint8)))
+    assert drawn[0][0] == "Production overview"
+    assert drawn[1][0] == "Ampoule counting"
+    assert drawn[0][1][1] < drawn[1][1][1] < drawn[2][1][1]
+    assert visualizer.style.summary_subtitle == "Ampoule counting"
+
+
+@pytest.mark.parametrize("subtitle", ["", "  ", 42, False])
+def test_invalid_subtitle_is_rejected(subtitle):
+    with pytest.raises(ValueError, match="summary_subtitle"):
+        Visualizer(summary_subtitle=subtitle)
+
+
+@pytest.mark.parametrize("shape", [(1, 1), (24, 40), (1920, 1080), (1080, 1920)])
+def test_subtitle_and_vertical_legend_fit_all_frame_sizes(shape, arial):
+    image = np.zeros((*shape, 3), np.uint8)
+    output = Visualizer(
+        demo="heatmap", summary_title="Traffic overview", summary_subtitle="A long subtitle " * 10
+    )(Prediction(image))
+    assert output.shape == image.shape
+    assert not image.any()
+
+
+def test_heatmap_legend_has_high_values_above_low_values(arial):
+    from ultraviz.branding import DARK_BLUE, NEON_PINK
+
+    frame = Visualizer(demo="heatmap", heatmap_opacity=0)(
+        Prediction(np.zeros((720, 1280, 3), np.uint8))
+    )
+    ys, xs = np.where(np.all(frame == NEON_PINK[::-1], axis=2))
+    assert len(ys) > 0
+    top = int(ys.min())
+    column = int(np.median(xs))
+    bottom = np.flatnonzero(np.all(frame[:, column] == DARK_BLUE[::-1], axis=1))
+    assert bottom.max() - top > xs.max() - xs.min()
+    assert bottom.max() > top

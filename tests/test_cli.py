@@ -146,7 +146,9 @@ def test_cli_default_summary_is_visible_in_heatmap_without_flag(
     original = SummaryPanel.draw
 
     def capture(self, image, summary, style, font):
-        captured.append((summary.task, style.summary, style.boxes, style.labels))
+        captured.append(
+            (summary.task, style.summary, style.boxes, style.labels, style.summary_subtitle)
+        )
         return original(self, image, summary, style, font)
 
     monkeypatch.setattr(SummaryPanel, "draw", capture)
@@ -164,8 +166,10 @@ def test_cli_default_summary_is_visible_in_heatmap_without_flag(
                 str(tmp_path / "heatmap.png"),
                 "--demo",
                 "heatmap",
+                "--summary-subtitle",
+                "Camera 01",
             ]
         )
         == 0
     )
-    assert captured == [("heatmap", True, False, False)]
+    assert captured == [("heatmap", True, False, False, "Camera 01")]

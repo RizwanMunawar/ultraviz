@@ -39,6 +39,8 @@ class Visualizer(Iterator[Any]):
         tracking: bool | None = None,
         task: str | None = None,
         demo: str | None = None,
+        summary_title: str | None = None,
+        summary_subtitle: str | None = None,
         on_result: Callable[[Any], None] | None = None,
         **options: Any,
     ) -> None:
@@ -74,6 +76,10 @@ class Visualizer(Iterator[Any]):
         else:
             raise TypeError("args must be a source, dictionary, Namespace or Style configuration")
         settings.update(options)
+        if summary_title is not None:
+            settings["summary_title"] = summary_title
+        if summary_subtitle is not None:
+            settings["summary_subtitle"] = summary_subtitle
         configured_task = settings.pop("task", None)
         configured_tracking = settings.pop("tracking", False)
         selected_task = task if task is not None else nested_task
