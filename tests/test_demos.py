@@ -80,11 +80,11 @@ def test_default_label_touches_box_while_retaining_padding(arial):
 
 def test_default_font_and_line_width_consider_image_and_box_sizes():
     style = Style()
-    assert style.resolved_line_width((1080, 1920)) == 3
-    assert style.resolved_line_width((2160, 3840)) == 6
+    assert style.resolved_line_width((1080, 1920)) == 4
+    assert style.resolved_line_width((2160, 3840)) == 8
     assert style.resolved_line_width((2160, 3840), (20, 12)) == 1
     assert style.resolved_font_size((1080, 1920), (20, 12)) == 10
-    assert style.resolved_font_size((1080, 1920), (500, 300)) == 27
+    assert style.resolved_font_size((1080, 1920), (500, 300)) == 30
     assert Style(line_width=4, font_size=24).resolved_line_width((96, 128), (20, 12)) == 4
     assert Style(font_size=24).resolved_font_size((96, 128), (20, 12)) == 24
 

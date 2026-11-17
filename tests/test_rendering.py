@@ -289,7 +289,7 @@ def test_auto_font_size_and_rounded_labels(arial):
     large_output = visualizer(Prediction(large, (item,)))
     large_size = visualizer._annotator._font.size
     assert small_size == 10
-    assert large_size == 27
+    assert large_size == 30
     assert not small_output[80, 80].any()  # Rounded bottom left of the label fill.
     assert small_output.any() and large_output.any()
     explicit = Visualizer(font_size=16)

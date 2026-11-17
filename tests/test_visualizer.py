@@ -99,11 +99,11 @@ def test_disabled_layers_skip_tensor_conversion_for_render_and_export(image, tmp
     "height,width,line,font",
     [
         (360, 640, 1, 10),
-        (720, 1280, 2, 18),
-        (1080, 1920, 3, 27),
-        (1440, 2560, 4, 36),
-        (2160, 3840, 6, 54),
-        (4320, 7680, 12, 108),
+        (720, 1280, 3, 20),
+        (1080, 1920, 4, 30),
+        (1440, 2560, 5, 40),
+        (2160, 3840, 8, 60),
+        (4320, 7680, 16, 120),
     ],
 )
 def test_automatic_sizes_follow_resolution_in_both_orientations(height, width, line, font):
@@ -128,8 +128,8 @@ def test_portrait_and_landscape_render_with_same_font_and_outline(arial, monkeyp
         output = visualizer(Prediction(image, (item,)))
         sizes.append(visualizer._annotator._font.size)
         assert output.shape == image.shape
-    assert widths == [2, 2, 3, 3]
-    assert sizes == [18, 18, 27, 27]
+    assert widths == [3, 3, 4, 4]
+    assert sizes == [20, 20, 30, 30]
 
 
 def test_fixed_overrides_and_tiny_object_limits_on_large_images():
