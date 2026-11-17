@@ -654,3 +654,39 @@ Modules have descriptive responsibilities: `visualizer.py`, `annotation.py`,
 ## License
 
 [AGPL-3.0-only](LICENSE). Ultralytics and Arial retain their licenses and trademarks.
+
+
+## Publishing releases
+
+Merging a PR into `main` runs the Release workflow. It first runs the same lint,
+type, build and full operating system/Python test matrix used for PR checks.
+After success, it verifies that `pyproject.toml` and `ultraviz.__version__` agree,
+builds a wheel and source archive, checks distribution metadata with Twine, and
+publishes a new version to PyPI using Trusted Publishing. Opening or updating
+a PR does not publish a package. The initial version is `0.0.1`.
+
+One time setup in the maintainer's PyPI account is required before merging:
+add a [pending Trusted Publisher](https://pypi.org/manage/account/publishing/)
+with these values (or add a publisher in the existing project's settings):
+
+| Field | Value |
+| --- | --- |
+| PyPI project | `ultraviz` |
+| GitHub owner | `RizwanMunawar` |
+| Repository | `ultraviz` |
+| Workflow filename | `release.yml` |
+| Environment | `pypi` |
+
+No PyPI token is stored in the repository. See the
+[PyPI Trusted Publishing documentation](https://docs.pypi.org/trusted-publishers/using-a-publisher/).
+The workflow uses a GitHub environment named `pypi`, created automatically on
+first use if needed. Any deployment rules configured on that environment still
+apply. The name `ultraviz` must be available on PyPI or owned by the maintainer.
+
+For later releases, update both version declarations in the same PR. Commits
+with an already published version skip uploading. PyPI releases are immutable;
+package changes require a new version. A failed publishing run can be retried
+through Actions by rerunning failed jobs, or by manually running Release on
+`main`. Manual runs on other branches cannot publish. Distributions are kept as
+workflow artifacts for seven days. This PR configures publishing; it does not
+merge itself or upload the package before merge.
